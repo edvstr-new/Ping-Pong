@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090c14">
+    <title>PONG — The Arcade, Reimagined</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#" data-page="home" aria-label="Pong home">
+          <span class="brand-mark"><span></span><span></span></span>
+          <span>PONG<span class="brand-period">.</span><small>ARCADE OS</small></span>
+        </a>
+        <div class="nav-label">THE ARCADE</div>
+        <nav class="main-nav" aria-label="Main navigation">
+          <button class="nav-item active" data-page="home"><span class="nav-icon">⌂</span>Overview</button>
+          <button class="nav-item" data-page="tutorial"><span class="nav-icon">◉</span>Tutorial <span class="nav-badge">01</span></button>
+          <button class="nav-item" data-page="problems"><span class="nav-icon">⌁</span>Pong Problems</button>
+          <button class="nav-item" data-page="onevone"><span class="nav-icon">↔</span>Pong 1v1</button>
+          <button class="nav-item" data-page="evolution"><span class="nav-icon">◈</span>Pong Evolution</button>
+          <button class="nav-item" data-page="world"><span class="nav-icon">◎</span>Pong World</button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="online-indicator"><i></i> ARCADE ONLINE</div>
+          <div class="sidebar-version">ENGINE <span>LIVE</span></div>
+          <div class="sidebar-credit">BUILT FOR THE LOVE OF THE GAME</div>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="breadcrumb"><span>ARCADE</span><b>/</b><strong id="current-location">OVERVIEW</strong></div>
+          <div class="topbar-right">
+            <div class="top-status"><span class="status-pulse"></span> ALL SYSTEMS GO</div>
+            <div class="avatar" title="Player profile">P</div>
+          </div>
+        </header>
+
+        <section class="page active" id="page-home">
+          <div class="welcome-row">
+            <div>
+              <div class="eyebrow"><span class="eyebrow-line"></span> YOUR ARCADE, YOUR RULES</div>
+              <h1>The game never<br><span class="text-muted">stays the same.</span></h1>
+              <p class="welcome-copy">Learn the angles. Outsmart the machine. Build an AI that plays for you.<br>Welcome to a whole new kind of Pong.</p>
+            </div>
+            <div class="welcome-decoration" aria-hidden="true"><div class="deco-orbit"></div><div class="deco-ball"></div><div class="deco-paddle deco-left"></div><div class="deco-paddle deco-right"></div><span class="deco-score">0&nbsp; : &nbsp;0</span></div>
+          </div>
+
+          <div class="section-heading"><div><span class="eyebrow">PICK YOUR PLAYSTYLE</span><h2>Enter the arena<span class="accent">.</span></h2></div><span class="section-count">05 EXPERIENCES</span></div>
+          <div class="experience-grid">
+            <button class="experience-card card-tutorial" data-page="tutorial">
+              <span class="card-topline"><span class="card-tag tag-cyan">LEARN</span><span class="card-arrow">↗</span></span>
+              <span class="card-art art-tutorial"><span class="art-paddle"></span><span class="art-ball"></span><span class="art-trail"></span></span>
+              <span class="card-title">Tutorial</span><span class="card-description">From first serve to frame-perfect returns.</span>
+              <span class="card-footer">START LEARNING <span>→</span></span>
+            </button>
+            <button class="experience-card card-problems" data-page="problems">
+              <span class="card-topline"><span class="card-tag tag-violet">TRAIN</span><span class="card-arrow">↗</span></span>
+              <span class="card-art art-problems"><span class="target-ring"></span><span class="target-dot"></span><span class="target-path"></span></span>
+              <span class="card-title">Pong Problems</span><span class="card-description">Read the trajectory. Make the right call.</span>
+              <span class="card-footer">TEST YOUR INSTINCTS <span>→</span></span>
+            </button>
+            <button class="experience-card card-versus" data-page="onevone">
+              <span class="card-topline"><span class="card-tag tag-orange">COMPETE</span><span class="card-arrow">↗</span></span>
+              <span class="card-art art-versus"><span class="versus-paddle"></span><span class="versus-ball"></span><span class="versus-dash"></span></span>
+              <span class="card-title">Pong 1v1</span><span class="card-description">Your friend, the AI, or a full machine derby.</span>
+              <span class="card-footer">ENTER MATCHMAKING <span>→</span></span>
+            </button>
+            <button class="experience-card card-evolution" data-page="evolution">
+              <span class="card-topline"><span class="card-tag tag-green">EVOLVE</span><span class="card-arrow">↗</span></span>
+              <span class="card-art art-evolution"><span class="evo-core">AI</span><span class="evo-orbit evo-orbit-one"></span><span class="evo-orbit evo-orbit-two"></span></span>
+              <span class="card-title">Pong Evolution</span><span class="card-description">Train your AI. Let it play. Build a legend.</span>
+              <span class="card-footer">GROW YOUR PLAYER <span>→</span></span>
+            </button>
+            <button class="experience-card card-world" data-page="world">
+              <span class="card-topline"><span class="card-tag tag-blue">EXPLORE</span><span class="card-arrow">↗</span></span>
+              <span class="card-art art-world"><span class="world-hill hill-one"></span><span class="world-hill hill-two"></span><span class="world-player"></span><span class="world-star">✦</span></span>
+              <span class="card-title">Pong World</span><span class="card-description">A tiny world with a very big game.</span>
+              <span class="card-footer">FIND YOUR WAY <span>→</span></span>
+            </button>
+          </div>
+          <div class="home-bottom"><span class="home-bottom-icon">✳</span><span><strong>ONE ENGINE. ENDLESS WAYS TO PLAY.</strong><small>Every mode is powered by the latest Pong mechanics.</small></span><span class="engine-version">ENGINE&nbsp; LIVE</span></div>
+        </section>
+
+        <section class="page" id="page-tutorial">
+          <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> THE STARTING LINE</div><h1>Learn the <span class="text-muted">language</span><br>of the game.</h1><p>Every great rally starts with one good return. Master the fundamentals, then bend the rules.</p></div>
+          <div class="lesson-layout">
+            <div class="lesson-list" id="lesson-list"></div>
+            <article class="panel lesson-panel"><div class="lesson-kicker" id="lesson-kicker">LESSON 01 / 06</div><h2 id="lesson-title"></h2><p id="lesson-description"></p><div class="lesson-demo" id="lesson-demo"><div class="demo-center-line"></div><div class="demo-paddle demo-paddle-left"></div><div class="demo-paddle demo-paddle-right"></div><div class="demo-ball"></div><span class="demo-label">DEMO IN PROGRESS</span></div><div class="lesson-controls"><span id="lesson-progress">0 OF 6 COMPLETED</span><button class="button button-primary" id="lesson-next">MARK COMPLETE&nbsp; ↗</button></div></article>
+          </div>
+        </section>
+
+        <section class="page" id="page-problems">
+          <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> TRAIN YOUR READ</div><h1>See it coming<span class="accent">.</span></h1><p>The ball is frozen mid-flight. Where will it land? Trust your read and place your paddle.</p></div>
+          <div class="problem-layout">
+            <div class="panel challenge-panel"><div class="panel-header"><span class="card-tag tag-violet">CHALLENGE 01</span><span class="difficulty">◈ &nbsp;WARM UP</span></div><h2 id="problem-title">Read the bounce</h2><p id="problem-prompt">The ball is frozen mid-flight. Follow its angle and predict where it will reach your paddle.</p><div class="problem-types" role="tablist" aria-label="Challenge type"><button class="problem-type active" data-problem-type="prediction">TRAJECTORY</button><button class="problem-type" data-problem-type="timing">TIMING</button><button class="problem-type" data-problem-type="strategy">STRATEGY</button></div><div class="problem-court"><div class="problem-net"></div><div class="problem-paddle problem-paddle-left"></div><div class="problem-paddle problem-paddle-right" id="opponent-paddle"></div><div class="problem-ball" id="problem-ball"></div><div class="prediction-marker" id="prediction-marker"></div><span class="court-y-top">TOP</span><span class="court-y-bottom">BOTTOM</span></div><div id="prediction-controls"><div class="range-labels"><span>TOP</span><span>SET YOUR PADDLE POSITION</span><span>BOTTOM</span></div><input id="prediction-range" type="range" min="0" max="100" value="50" aria-label="Predicted landing position"></div><div class="timing-challenge hidden"><span class="timing-label">TAP WHEN THE PULSE HITS THE TARGET</span><div class="timing-track" id="timing-track"><span class="timing-target" id="timing-target"></span><span class="timing-marker"></span></div></div><div class="strategy-challenge hidden"><span class="timing-label" id="strategy-prompt">Choose the open side of the court.</span><div class="strategy-options"><button class="strategy-option" data-target="top">AIM HIGH</button><button class="strategy-option" data-target="center">CENTER</button><button class="strategy-option" data-target="bottom">AIM LOW</button></div></div><div class="problem-actions"><button class="button button-secondary" id="new-problem">NEW CHALLENGE</button><button class="button button-primary" id="check-prediction">LOCK IN PREDICTION&nbsp; ↗</button></div><div class="problem-result" id="problem-result" aria-live="polite"></div></div>
+            <aside class="panel problem-stats"><div class="eyebrow">YOUR READS</div><div class="stat-block"><span class="stat-number" id="problem-streak">0</span><span class="stat-label">BEST STREAK</span></div><div class="stat-divider"></div><div class="stat-block"><span class="stat-number" id="problem-accuracy">—<small>%</small></span><span class="stat-label">AVG. ACCURACY</span></div><div class="stat-divider"></div><div class="stat-block"><span class="stat-number" id="problem-solved">0</span><span class="stat-label">SOLVED</span></div><div class="tip-box"><span>✦ PRO TIP</span><p>The ball reflects off the top and bottom walls. Think of the court as an unfolded mirror.</p></div></aside>
+          </div>
+        </section>
+
+        <section class="page" id="page-onevone">
+          <div class="game-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> THE CLASSIC, REWIRED</div><h1>One court.<br><span class="text-muted">No two rallies alike.</span></h1></div><div class="match-live"><span class="status-pulse"></span> LIVE ENGINE</div></div>
+          <div class="game-layout">
+            <div class="panel game-panel"><div class="game-toolbar"><div class="mode-tabs"><button class="mode-tab selected" data-mode="ai">VS AI</button><button class="mode-tab" data-mode="local">LOCAL 1V1</button><button class="mode-tab" data-mode="arena">AI DERBY</button></div><button class="icon-button" id="reset-game" title="Restart match">↻</button></div><div class="scoreboard"><div class="score-player"><span class="player-dot player-dot-cyan"></span><span id="left-player-label">YOU</span><strong id="score-left">0</strong></div><span class="score-separator">:</span><div class="score-player score-player-right"><strong id="score-right">0</strong><span id="right-player-label">CPU</span><span class="player-dot player-dot-orange"></span></div></div><div class="ad-slot court-ad-slot" hidden aria-label="Static ad placement above the court"><span class="ad-slot-label">ADVERTISEMENT</span><strong>Static display ad</strong><small>AdSense unit goes here</small></div><div class="game-court-wrap"><canvas id="pong-canvas" width="900" height="500" aria-label="Pong game court"></canvas><div class="qte-prompt" id="qte-prompt"><span>QUICK RETURN</span><strong id="qte-key">E</strong><small>PRESS NOW</small></div><div class="game-overlay" id="game-overlay"><div class="overlay-chip">READY WHEN YOU ARE</div><strong>FIRST TO 7</strong><button class="button button-primary" id="start-game">START MATCH&nbsp; ↗</button></div></div><div class="ad-slot court-ad-slot" hidden aria-label="Static ad placement below the court"><span class="ad-slot-label">ADVERTISEMENT</span><strong>Static display ad</strong><small>AdSense unit goes here</small></div><div class="game-bottom"><span>MOVE <kbd>W</kbd><kbd>S</kbd></span><span>POWER SERVE <kbd>SPACE</kbd></span><span class="game-hint" id="game-hint">First to 7 wins the match</span></div></div>
+            <aside class="game-aside"><div class="panel match-settings"><div class="eyebrow">MATCH SETUP</div><div class="setting-row"><span>POINTS TO WIN</span><select id="points-select"><option value="7">7 POINTS</option><option value="11">11 POINTS</option><option value="15">15 POINTS</option></select></div><div class="setting-row"><span>POWERUPS</span><button class="toggle active" id="power-toggle" aria-pressed="true"><i></i></button></div><div class="setting-row"><span>PADDLE TILT</span><span class="setting-value">AUTO</span></div><div class="setting-note">Power serve enlarges your paddle for a short window. Find the sweet spot.</div></div><div class="panel controls-card"><div class="eyebrow">CONTROLS</div><div class="control-line"><span>Move paddle</span><span><kbd>W</kbd><kbd>S</kbd></span></div><div class="control-line"><span>Power serve</span><span><kbd>SPACE</kbd></span></div><div class="control-line"><span>Opponent</span><span id="control-opponent">AI</span></div></div></aside>
+          </div>
+        </section>
+
+        <section class="page" id="page-evolution">
+          <div class="page-intro"><div class="eyebrow"><span class="eyebrow-line"></span> YOUR AI. YOUR STRATEGY.</div><h1>Don’t play Pong.<br><span class="text-muted">Build the player.</span></h1><p>Your AI faces a perfect opponent, learns from every rally, and earns cash while you plan its next upgrade.</p></div>
+          <div class="evolution-start panel" id="evolution-start"><div class="evolution-start-mark"><span>AI</span><i></i><i></i></div><div><span class="card-tag tag-green">A FRESH SAVE FILE</span><h2>Every great AI starts somewhere.</h2><p>Start a new career or import a <strong>Pong Evolution v1</strong> save. This mode has its own save format, completely separate from Pong World and the legacy prototype.</p><div class="start-actions"><button class="button button-primary" id="start-evolution">START A NEW GAME&nbsp; ↗</button><button class="button button-secondary" id="import-evolution">IMPORT SAVE FILE</button><input type="file" id="evolution-file" accept=".json,application/json" hidden></div></div></div>
+          <div class="evolution-dashboard hidden" id="evolution-dashboard">
+            <div class="evolution-topline"><div><span class="card-tag tag-green">YOUR PLAYER</span><h2 id="evo-name">ROOKIE-01</h2><span class="evo-level" id="evo-level">LEVEL 1 · NOVICE</span></div><div class="cash-display"><span>AVAILABLE CASH</span><strong><i>¢</i><b id="evo-cash">0</b></strong></div><div class="evo-actions"><button class="button button-secondary button-small" id="export-evolution">EXPORT SAVE</button><button class="icon-button" id="reset-evolution" title="Start a new career">↻</button></div></div>
+            <div class="evolution-grid"><div class="panel ai-arena"><div class="panel-header"><span class="eyebrow">LIVE SIMULATION</span><span class="simulation-live"><i></i> LEARNING</span></div><div class="mini-court"><div class="mini-net"></div><div class="mini-paddle mini-left"></div><div class="mini-paddle mini-right"></div><div class="mini-ball"></div></div><div class="arena-score"><span>YOUR AI</span><strong><b id="evo-wins">0</b> <i>W</i><b id="evo-losses">0</b> <i>L</i></strong><span>PERFECT AI</span></div><div class="learning-row"><span>LEARNING PROGRESS</span><span id="evo-xp-label">0 / 100 XP</span></div><div class="progress-track"><span id="evo-xp-bar"></span></div><p class="arena-footnote">Matches run automatically. Your AI is playing both sides of the court.</p></div>
+              <div class="panel upgrade-panel"><div class="panel-header"><div><span class="eyebrow">THE LAB</span><h3>Upgrade your edge.</h3></div><span class="upgrade-count" id="upgrade-count">0 UPGRADES</span></div><div class="upgrade-list" id="upgrade-list"></div></div>
+              <div class="panel incentive-panel"><div class="eyebrow">BEHAVIOUR INCENTIVES</div><h3>Reward the right instincts.</h3><p>Incentives shape what your AI learns from each rally.</p><div id="incentive-list"></div></div></div>
+          </div>
+          <div class="save-separation"><span>◈</span><span><strong>YOUR SAVES STAY IN THEIR OWN WORLDS.</strong><small>Evolution v1 saves cannot be opened by the legacy AI prototype. World progress is stored separately.</small></span></div>
+        </section>
+
+        <section class="page" id="page-world">
+          <div class="game-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> OPEN ARCADE, OPEN ROAD</div><h1>Welcome to <span class="text-muted">Pong World.</span></h1><p class="welcome-copy">Explore the courts, meet the locals, and see what’s around the next corner.</p></div><div class="world-coins"><span>WORLD TOKENS</span><strong>◈ <b id="world-tokens">0</b></strong></div></div>
+          <div class="world-layout"><div class="panel world-panel"><div class="world-toolbar"><span class="world-location"><i></i> NEON DISTRICT <b>/</b> CENTRAL PARK</span><span class="world-coordinates" id="world-coordinates">X: 08 · Y: 06</span></div><canvas id="world-canvas" width="800" height="500" aria-label="Explore Pong World using the arrow keys or WASD"></canvas><div class="world-controls"><span>MOVE WITH <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> OR ARROW KEYS</span><span id="world-message">Find the glowing arcade to earn a token.</span></div></div><aside class="panel world-guide"><div class="eyebrow">FIELD GUIDE</div><h3>Make yourself<br>at home.</h3><div class="guide-item"><span class="guide-icon guide-icon-arcade">⌗</span><span><strong>THE ARCADE</strong><small>Find the glowing court and press <kbd>E</kbd>.</small></span></div><div class="guide-item"><span class="guide-icon guide-icon-people">◉</span><span><strong>THE LOCALS</strong><small>There’s always a match happening somewhere.</small></span></div><div class="guide-item"><span class="guide-icon guide-icon-world">✦</span><span><strong>YOUR WORLD SAVE</strong><small>Stored separately from Pong Evolution.</small></span></div></aside></div>
+        </section>
+
+        <footer class="app-footer"><span>© 2025 PONG ARCADE</span><span>MADE FOR THE NEXT GENERATION OF PONG</span><span>ENGINE LIVE <i>●</i></span></footer>
+      </main>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <dialog class="consent-dialog" id="ad-consent-dialog" aria-labelledby="ad-consent-title" aria-describedby="ad-consent-copy">
+        <div class="consent-mark" aria-hidden="true">P<span>·</span></div>
+        <div class="eyebrow"><span class="eyebrow-line"></span> A QUICK HEADS-UP</div>
+        <h2 id="ad-consent-title">Accept ads<br>to enter.</h2>
+        <p id="ad-consent-copy">Accept to enter the arcade and allow static display ads in the reserved spots above and below the match court. No video ads, interstitials, or ads over the game.</p>
+        <p class="consent-note">This preview has no AdSense account connected, so no ads are loaded yet.</p>
+        <div class="consent-actions">
+          <button class="button button-primary" id="accept-ads">ACCEPT ADS &amp; ENTER</button>
+        </div>
+      </dialog>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
