@@ -230,6 +230,7 @@
     paddle:{name:"2× PADDLE",color:"#a4f6b1"},
     double:{name:"DOUBLE BALL",color:"#c5adff"}
   };
+  const pongBallRadius=7,powerupOrbRadius=pongBallRadius*3;
   function renderPowerStatus(){
     const active=[];
     for(const side of ["left","right"]){
@@ -332,7 +333,7 @@
         game.orb={x:canvas.width/2,y:35+Math.random()*(canvas.height-70),type};
       }}
       for(const ball of game.balls.concat(game.extraBalls)){
-        if(game.orb&&Math.hypot(ball.x-game.orb.x,ball.y-game.orb.y)<=7+7*Math.sqrt(3)){
+        if(game.orb&&Math.hypot(ball.x-game.orb.x,ball.y-game.orb.y)<=pongBallRadius+powerupOrbRadius){
           const {type}=game.orb;game.orb=null;game.orbSpawnTimer=3+Math.random()*4;awardPowerup(game.lastHit,type);
         }
       }
@@ -353,8 +354,8 @@
     }
     if(game.orb){
       ctx.shadowColor=powerupTypes[game.orb.type].color;ctx.shadowBlur=19;ctx.fillStyle=powerupTypes[game.orb.type].color;
-      ctx.beginPath();ctx.arc(game.orb.x,game.orb.y,7*Math.sqrt(3),0,Math.PI*2);ctx.fill();
-      ctx.shadowBlur=0;ctx.fillStyle="#10141e";ctx.font="bold 10px monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.beginPath();ctx.arc(game.orb.x,game.orb.y,powerupOrbRadius,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;ctx.fillStyle="#10141e";ctx.font="bold 14px monospace";ctx.textAlign="center";ctx.textBaseline="middle";
       ctx.fillText(game.orb.type==="paddle"?"2×":game.orb.type==="double"?"×2":game.orb.type==="fast"?"F":"S",game.orb.x,game.orb.y+0.5);ctx.textBaseline="alphabetic";
     }
     ctx.shadowBlur=0;
