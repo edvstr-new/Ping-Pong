@@ -10,7 +10,7 @@ Open `index.html` in a modern browser. The app uses plain HTML, CSS, and JavaScr
 
 - **Tutorial:** Six lessons covering paddle movement, returns, tilt, powerups, QTEs, and rally reading.
 - **Pong Problems:** Position a paddle while the trajectory is frozen, then test your read against a live ball; practice WASD quicktime combos and drag-tracking bouncing returns.
-- **Pong 1v1:** Play against an AI, share a keyboard, or watch two AIs play.
+- **Pong 1v1:** Play against an AI, share a keyboard, or watch two AIs play. Enabled powerups spawn as glowing orbs on the center line: claim fastball, slowball, double-paddle, or double-ball effects by hitting the orb; your latest paddle hit receives the power.
 - **Pong Evolution:** Watch your AI play full matches against a rival, then use its earnings to buy upgrades and incentives. Evolution exports use the `pong-evolution-save` v1 format.
 - **Pong World:** Explore an infinite, procedurally generated world with WASD or the arrow keys. Find structures, job boards, randomized loot, recruitable AI teammates, and open doubles courts. Interact with nearby sites using E, take on courier/scavenging/sparring contracts, and play 2v2 matches. Your location, crew, inventory, and progress are saved separately.
 

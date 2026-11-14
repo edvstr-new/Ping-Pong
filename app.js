@@ -51,7 +51,7 @@
     {title:"Movement & controls",short:"Find your feet",body:"Use W and S only to move your paddle up and down. Press A to tilt it right (front edge up) or D to tilt it left (front edge down). In local matches, Player 2 uses the arrow keys the same way: up/down to move and left/right to tilt."},
     {title:"The perfect return",short:"Meet the ball",body:"A return is more than a save. The point where the ball hits your paddle changes its angle: hit near the center for a steady shot, or near an edge to send it wide."},
     {title:"Paddle tilt",short:"Shape the angle",body:"Moving your paddle tilts it by a full 45 degrees. Meet the ball while moving to add spin and shape a sharper return. The tilt is bold, so time your movement deliberately."},
-    {title:"Powerups",short:"Change the rally",body:"Tap Space to trigger a power serve when the ability is ready. With powerups enabled, it temporarily widens your paddle—save it for a difficult return."},
+    {title:"Powerups",short:"Claim an orb",body:"Glowing orbs spawn on the center line. The last player to hit the ball claims the orb's power: fastball, slowball, a double-size paddle, or a split double ball. Each power lasts up to ten seconds."},
     {title:"Quick time events",short:"React on cue",body:"Watch for a QTE cue during high-pressure rallies. Press the full random combination of W, A, S, and D keys in the order shown before time runs out to steady your return."},
     {title:"Read the rally",short:"Think ahead",body:"The ball reflects off the court walls. Track its angle and speed to predict where it will meet your paddle. Mix up your own return to keep the opponent guessing."}
   ];
@@ -203,7 +203,7 @@
 
   const canvas = $("#pong-canvas");
   const ctx = canvas.getContext("2d");
-  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,ballX:450,ballY:250,vx:5,vy:2.6,scoreLeft:0,scoreRight:0,paddleHeight:76,boost:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,rallies:0};
+  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,balls:[],extraBalls:[],orb:null,orbSpawnTimer:4,leftHeight:76,rightHeight:76,paddleBoost:{left:0,right:0},powers:{left:null,right:null},lastHit:"left",scoreLeft:0,scoreRight:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,rallies:0};
   const keys = new Set();
   function randomQteSequence(){
     const sequence=["w","a","s","d"];
@@ -213,75 +213,233 @@
     }
     return sequence;
   }
-  function resetBall(direction = Math.random() < .5 ? -1 : 1) {
-    game.ballX = canvas.width/2; game.ballY = canvas.height/2;
-    game.vx = direction * (4.6 + Math.random()*1.1); game.vy = (Math.random()-.5)*5.2;
+  function resetBall(direction = Math.random() < .5 ? -1 : 1,lastHit=direction>0?"left":"right") {
+    game.balls=[{x:canvas.width/2,y:canvas.height/2,vx:direction*(4.6+Math.random()*1.1),vy:(Math.random()-.5)*5.2,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0}];
+    game.extraBalls=[];game.orb=null;game.orbSpawnTimer=1.5+Math.random()*2;
+    game.powers={left:null,right:null};game.paddleBoost={left:0,right:0};game.leftHeight=76;game.rightHeight=76;
+    game.lastHit=lastHit;
     game.qteTimer=0;game.qteSequence=[];game.qteIndex=0;game.rallies=0;$("#qte-prompt").classList.remove("active");
   }
   function resetMatch() {
-    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.boost=0; game.qteTimer=0;game.qteSequence=[];game.qteIndex=0; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();
+    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.qteTimer=0;game.qteSequence=[];game.qteIndex=0; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();renderPowerStatus();
     $("#score-left").textContent="0"; $("#score-right").textContent="0"; $("#game-overlay").classList.remove("hidden"); $("#start-game").textContent="START MATCH  ↗"; drawPong();
+  }
+  const powerupTypes={
+    fast:{name:"FASTBALL",color:"#ffcf77"},
+    slow:{name:"SLOWBALL",color:"#93baff"},
+    paddle:{name:"2× PADDLE",color:"#a4f6b1"},
+    double:{name:"DOUBLE BALL",color:"#c5adff"}
+  };
+  function renderPowerStatus(){
+    const active=[];
+    for(const side of ["left","right"]){
+      const power=game.powers[side],boost=game.paddleBoost[side];
+      if(power)active.push(`${side==="left"?"YOU":"CPU"} · ${powerupTypes[power.type].name}`);
+      if(boost>0)active.push(`${side==="left"?"YOU":"CPU"} · 2× PADDLE ${Math.ceil(boost)}s`);
+    }
+    for(const ball of game.balls.concat(game.extraBalls)){
+      if(["fast","slow","splitFast","splitSlow"].includes(ball.type)){
+        const label=ball.type==="fast"||ball.type==="splitFast"?"FAST BALL":ball.type==="slow"||ball.type==="splitSlow"?"SLOW BALL":"";
+        if(label)active.push(`${label} ${Math.ceil(ball.powerTimer)}s`);
+      }
+    }
+    if(game.orb)active.push(`${powerupTypes[game.orb.type].name} ORB ON CENTER LINE`);
+    $("#powerup-status").textContent=active.join("  ·  ")||(game.powerups?"Collect a glowing center-line orb":"Powerups disabled");
+  }
+  function awardPowerup(side,type){
+    if(type==="paddle")game.paddleBoost[side]=10;
+    else game.powers[side]={type,timer:10};
+    toast(`${side==="left"?"You":"CPU"} claimed ${powerupTypes[type].name}!`);
+    renderPowerStatus();
+  }
+  function splitDoubleBall(ball,side){
+    const forward=side==="left"?1:-1,speed=Math.hypot(ball.vx,ball.vy);
+    const baseAngle=Math.atan2(ball.vy,Math.abs(ball.vx));
+    const splitAngle=Math.max(-.72,Math.min(.72,baseAngle));
+    const launch=(angle,type)=>({
+      x:ball.x,y:ball.y,vx:forward*Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
+      type,powerOwner:side,powerTimer:10,baseSpeed:speed
+    });
+    ball.type="splitFast";ball.powerOwner=side;ball.powerTimer=10;ball.baseSpeed=speed;
+    ball.vx=forward*Math.cos(splitAngle-.3)*speed*1.35;
+    ball.vy=Math.sin(splitAngle-.3)*speed*1.35;
+    game.extraBalls.push(launch(splitAngle+.3,"splitSlow"));
+  }
+  function hitPaddle(ball,side){
+    const ownPower=game.powers[side];
+    if(ball.type==="splitFast")return false;
+    if(ball.type==="splitSlow"){
+      const speed=ball.baseSpeed||Math.hypot(ball.vx,ball.vy);
+      ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;
+      ball.vx=(side==="left"?1:-1)*speed;ball.vy+=(ball.y-game[side])*.035;
+    }else{
+      if(ball.type==="fast"&&ball.powerOwner!==side){
+        const speed=Math.hypot(ball.vx,ball.vy),baseSpeed=ball.baseSpeed||speed/1.65;
+        ball.vx*=baseSpeed/speed;ball.vy*=baseSpeed/speed;
+        ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;
+      }
+      if(ball.type==="slow"&&ball.powerOwner===side){
+        const speed=Math.hypot(ball.vx,ball.vy),baseSpeed=ball.baseSpeed||speed/0.55;
+        ball.vx*=baseSpeed/speed;ball.vy*=baseSpeed/speed;
+        ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;
+      }
+      const contact=(ball.y-game[side])/(side==="left"?game.leftHeight:game.rightHeight);
+      ball.vx=(side==="left"?1:-1)*Math.abs(ball.vx)*1.045;
+      ball.vy+=contact*.11;
+      if(ownPower){
+        game.powers[side]=null;
+        if(ownPower.type==="fast"){
+          const speed=Math.hypot(ball.vx,ball.vy);ball.baseSpeed=speed;
+          ball.vx*=1.65;ball.vy*=1.65;ball.type="fast";ball.powerOwner=side;ball.powerTimer=ownPower.timer;
+        }else if(ownPower.type==="slow"){
+          const speed=Math.hypot(ball.vx,ball.vy);ball.baseSpeed=speed;
+          ball.vx*=.55;ball.vy*=.55;ball.type="slow";ball.powerOwner=side;ball.powerTimer=ownPower.timer;
+        }else if(ownPower.type==="double")splitDoubleBall(ball,side);
+        renderPowerStatus();
+      }
+    }
+    game.lastHit=side;game.rallies++;
+    if(side==="left"&&game.mode!=="arena"&&game.qteTimer<=0&&game.rallies>=3&&Math.random()<.2){
+      game.qteSequence=randomQteSequence();game.qteIndex=0;game.qteTimer=180;
+      $("#qte-key").innerHTML=game.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("");$("#qte-prompt").classList.add("active");
+    }
+    return true;
+  }
+  function updatePowerups(dt){
+    for(const side of ["left","right"]){
+      if(game.powers[side]){game.powers[side].timer-=dt/60;if(game.powers[side].timer<=0)game.powers[side]=null}
+      if(game.paddleBoost[side]>0){game.paddleBoost[side]=Math.max(0,game.paddleBoost[side]-dt/60)}
+    }
+    game.leftHeight=game.paddleBoost.left>0?152:76;
+    game.rightHeight=game.paddleBoost.right>0?152:76;
+    for(const ball of game.balls.concat(game.extraBalls)){
+      if(ball.powerTimer>0){
+        ball.powerTimer-=dt/60;
+        if(ball.powerTimer<=0){
+          const speed=Math.hypot(ball.vx,ball.vy);
+          if(ball.type==="fast"||ball.type==="slow"){
+            const baseSpeed=ball.baseSpeed||speed;
+            ball.vx*=baseSpeed/speed;ball.vy*=baseSpeed/speed;
+            ball.type="normal";
+          }else if(ball.type==="splitFast"||ball.type==="splitSlow")ball.type="normal";
+          ball.powerOwner=null;ball.powerTimer=0;
+        }
+      }
+    }
+    if(game.powerups){
+      if(!game.orb){game.orbSpawnTimer-=dt/60;if(game.orbSpawnTimer<=0){
+        const types=Object.keys(powerupTypes),type=types[Math.floor(Math.random()*types.length)];
+        game.orb={x:canvas.width/2,y:35+Math.random()*(canvas.height-70),type};
+      }}
+      for(const ball of game.balls.concat(game.extraBalls)){
+        if(game.orb&&Math.hypot(ball.x-game.orb.x,ball.y-game.orb.y)<=7+7*Math.sqrt(3)){
+          const {type}=game.orb;game.orb=null;game.orbSpawnTimer=3+Math.random()*4;awardPowerup(game.lastHit,type);
+        }
+      }
+    }else game.orb=null;
+    renderPowerStatus();
   }
   function drawPong() {
     if (!ctx) return;
     const w=canvas.width,h=canvas.height;
     ctx.clearRect(0,0,w,h); ctx.fillStyle="#0b1119"; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle="#263241";ctx.setLineDash([6,10]);ctx.beginPath();ctx.moveTo(w/2,0);ctx.lineTo(w/2,h);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle="#80eddd";ctx.shadowColor="#7df2e3";ctx.shadowBlur=14;ctx.save();ctx.translate(28.5,game.left);ctx.rotate(game.tiltLeft);ctx.fillRect(-4.5,-game.paddleHeight/2,9,game.paddleHeight);ctx.restore();
-    ctx.shadowColor="#ff9b72";ctx.fillStyle="#ff9b72";ctx.save();ctx.translate(w-28.5,game.right);ctx.rotate(game.tiltRight);ctx.fillRect(-4.5,-38,9,76);ctx.restore();
-    ctx.shadowColor="#7df2e3";ctx.fillStyle="#d6fff8";ctx.beginPath();ctx.arc(game.ballX,game.ballY,7,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    ctx.fillStyle="#80eddd";ctx.shadowColor="#7df2e3";ctx.shadowBlur=14;ctx.save();ctx.translate(28.5,game.left);ctx.rotate(game.tiltLeft);ctx.fillRect(-4.5,-game.leftHeight/2,9,game.leftHeight);ctx.restore();
+    ctx.shadowColor="#ff9b72";ctx.fillStyle="#ff9b72";ctx.save();ctx.translate(w-28.5,game.right);ctx.rotate(game.tiltRight);ctx.fillRect(-4.5,-game.rightHeight/2,9,game.rightHeight);ctx.restore();
+    for(const ball of game.balls.concat(game.extraBalls)){
+      ctx.shadowColor=ball.type==="fast"||ball.type==="splitFast"?"#ffcf77":ball.type==="slow"||ball.type==="splitSlow"?"#93baff":"#7df2e3";
+      ctx.fillStyle=ball.type==="fast"||ball.type==="splitFast"?"#ffe3a3":ball.type==="slow"||ball.type==="splitSlow"?"#b9d8ff":"#d6fff8";
+      ctx.beginPath();ctx.arc(ball.x,ball.y,7,0,Math.PI*2);ctx.fill();
+    }
+    if(game.orb){
+      ctx.shadowColor=powerupTypes[game.orb.type].color;ctx.shadowBlur=19;ctx.fillStyle=powerupTypes[game.orb.type].color;
+      ctx.beginPath();ctx.arc(game.orb.x,game.orb.y,7*Math.sqrt(3),0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;ctx.fillStyle="#10141e";ctx.font="bold 10px monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+      ctx.fillText(game.orb.type==="paddle"?"2×":game.orb.type==="double"?"×2":game.orb.type==="fast"?"F":"S",game.orb.x,game.orb.y+0.5);ctx.textBaseline="alphabetic";
+    }
+    ctx.shadowBlur=0;
   }
-  function finishPoint() {
-    if (game.ballX < 0) game.scoreRight++; else game.scoreLeft++;
+  function finishPoint(missedSide) {
+    if(missedSide==="left")game.scoreRight++;
+    else game.scoreLeft++;
     $("#score-left").textContent=game.scoreLeft; $("#score-right").textContent=game.scoreRight;
     if (game.scoreLeft >= game.pointsToWin || game.scoreRight >= game.pointsToWin) {
       game.running=false; $("#game-overlay").classList.remove("hidden");
       $("#game-overlay .overlay-chip").textContent=game.scoreLeft>game.scoreRight?"MATCH WON":"MATCH OVER";
       $("#game-overlay strong").textContent=game.scoreLeft>game.scoreRight?"NICE PLAY.":"NEXT RALLY.";
-      $("#start-game").textContent="PLAY AGAIN  ↗"; return;
+      $("#start-game").textContent="PLAY AGAIN  ↗";
+      game.orb=null;game.powers={left:null,right:null};game.paddleBoost={left:0,right:0};game.leftHeight=76;game.rightHeight=76;
+      game.extraBalls=[];
+      for(const ball of game.balls){ball.type="normal";ball.powerOwner=null;ball.powerTimer=0}
+      renderPowerStatus();return;
     }
-    resetBall(game.ballX<0?1:-1);
+    resetBall(missedSide==="left"?1:-1,missedSide==="left"?"right":"left");
   }
   function gameFrame(time) {
     const dt=Math.min((time-game.last)/16.67||1,2.4); game.last=time;
     if (game.running && $("#page-onevone").classList.contains("active")) {
       const speed=5.8*dt;
-      if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.paddleHeight/2,game.left-speed);
-      if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.paddleHeight/2,game.left+speed);
+      if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.leftHeight/2,game.left-speed);
+      if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.leftHeight/2,game.left+speed);
       if (game.mode==="local") {
-        if(keys.has("arrowup"))game.right=Math.max(game.paddleHeight/2,game.right-speed);
-        if(keys.has("arrowdown"))game.right=Math.min(canvas.height-game.paddleHeight/2,game.right+speed);
+        if(keys.has("arrowup"))game.right=Math.max(game.rightHeight/2,game.right-speed);
+        if(keys.has("arrowdown"))game.right=Math.min(canvas.height-game.rightHeight/2,game.right+speed);
       } else {
         const aiSpeed=game.mode==="arena"?4.4:3.7;
-        const target=game.ballX>canvas.width*.45?game.ballY:canvas.height/2;
+        const target=game.balls[0]?.x>canvas.width*.45?game.balls[0].y:canvas.height/2;
         game.right+=Math.max(-aiSpeed,Math.min(aiSpeed,target-game.right))*dt;
       }
       if(game.mode==="arena"){
-        const target=game.ballX<canvas.width*.55?game.ballY:canvas.height/2;
+        const target=game.balls[0]?.x<canvas.width*.55?game.balls[0].y:canvas.height/2;
         game.left+=Math.max(-4.4,Math.min(4.4,target-game.left))*dt;
       }
-      game.tiltLeft=keys.has("a")?-Math.PI/4:keys.has("d")?Math.PI/4:0;
+      game.tiltLeft=keys.has("a")?Math.PI/4:keys.has("d")?-Math.PI/4:0;
       game.tiltRight=game.mode==="local"?(keys.has("arrowleft")?Math.PI/4:keys.has("arrowright")?-Math.PI/4:0):0;
-      if(game.boost>0){game.boost-=dt;game.paddleHeight=112}else game.paddleHeight=76;
       if(game.qteTimer>0){game.qteTimer-=dt;if(game.qteTimer<=0)$("#qte-prompt").classList.remove("active")}
-      game.ballX+=game.vx*dt;game.ballY+=game.vy*dt;
-      if(game.ballY<7||game.ballY>canvas.height-7)game.vy*=-1;
-      const leftX=34,rightX=canvas.width-34;
-      if(game.vx<0&&game.ballX<=leftX&&Math.abs(game.ballY-game.left)<game.paddleHeight/2+8){game.ballX=leftX;game.vx=Math.abs(game.vx)*1.045;game.vy+=(game.ballY-game.left)*.055+(keys.has("s")?-.28:keys.has("w")?.28:0);game.rallies++;if(game.mode!=="arena"&&game.qteTimer<=0&&game.rallies>=3&&Math.random()<.2){game.qteSequence=randomQteSequence();game.qteIndex=0;game.qteTimer=180;$("#qte-key").innerHTML=game.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("");$("#qte-prompt").classList.add("active")}}
-      if(game.vx>0&&game.ballX>=rightX&&Math.abs(game.ballY-game.right)<38+8){game.ballX=rightX;game.vx=-Math.abs(game.vx)*1.035;game.vy+=(game.ballY-game.right)*.045;game.rallies++}
-      if(game.ballX<0||game.ballX>canvas.width)finishPoint();
-      game.vx=Math.max(-9,Math.min(9,game.vx));game.vy=Math.max(-7,Math.min(7,game.vy));
+      updatePowerups(dt);
+      if(game.mode!=="arena"){
+        const leftHalf=game.leftHeight/2;
+        game.left=Math.max(leftHalf,Math.min(canvas.height-leftHalf,game.left));
+      }
+      const rightHalf=game.rightHeight/2;
+      game.right=Math.max(rightHalf,Math.min(canvas.height-rightHalf,game.right));
+      const allBalls=game.balls.concat(game.extraBalls);
+      for(const ball of allBalls){
+        ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+        if(ball.y<7||ball.y>canvas.height-7){ball.y=Math.max(7,Math.min(canvas.height-7,ball.y));ball.vy*=-1}
+        const leftX=34,rightX=canvas.width-34;
+        if(ball.vx<0&&ball.x<=leftX&&Math.abs(ball.y-game.left)<game.leftHeight/2+8){
+          ball.x=leftX;
+          if(!hitPaddle(ball,"left")){
+            game.balls=game.balls.filter((current)=>current!==ball);
+            game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
+          }
+          else{ball.vy+=(keys.has("s")?-.28:keys.has("w")?.28:0);if(ball.type==="normal")ball.vx=Math.min(Math.abs(ball.vx),9)}
+        }
+        if(ball.vx>0&&ball.x>=rightX&&Math.abs(ball.y-game.right)<game.rightHeight/2+8){
+          ball.x=rightX;
+          if(!hitPaddle(ball,"right")){
+            game.balls=game.balls.filter((current)=>current!==ball);
+            game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
+          }
+          else if(ball.type==="normal")ball.vx=-Math.min(Math.abs(ball.vx),9);
+        }
+        if(ball.x<0||ball.x>canvas.width){finishPoint(ball.x<0?"left":"right");break}
+        const speed=Math.hypot(ball.vx,ball.vy),limit=ball.type==="fast"||ball.type==="splitFast"?15:9;
+        if(speed>limit){ball.vx*=limit/speed;ball.vy*=limit/speed}
+        ball.vy=Math.max(-10,Math.min(10,ball.vy));
+      }
     }
     drawPong();requestAnimationFrame(gameFrame);
   }
   requestAnimationFrame(gameFrame);
   function startMatch() {
-    game.pointsToWin=Number($("#points-select").value);game.running=true;game.scoreLeft=0;game.scoreRight=0;game.paddleHeight=76;resetBall();$("#score-left").textContent="0";$("#score-right").textContent="0";$("#game-overlay").classList.add("hidden");$("#game-overlay .overlay-chip").textContent="READY WHEN YOU ARE";$("#game-overlay strong").textContent=`FIRST TO ${game.pointsToWin}`;
+    game.pointsToWin=Number($("#points-select").value);game.running=true;game.scoreLeft=0;game.scoreRight=0;resetBall();$("#score-left").textContent="0";$("#score-right").textContent="0";$("#game-overlay").classList.add("hidden");$("#game-overlay .overlay-chip").textContent="READY WHEN YOU ARE";$("#game-overlay strong").textContent=`FIRST TO ${game.pointsToWin}`;
   }
   $("#start-game").addEventListener("click",startMatch);
   $("#reset-game").addEventListener("click",resetMatch);
   $("#points-select").addEventListener("change",()=>game.pointsToWin=Number($("#points-select").value));
-  $("#power-toggle").addEventListener("click",function(){game.powerups=!game.powerups;this.classList.toggle("active",game.powerups);this.setAttribute("aria-pressed",String(game.powerups))});
+  $("#power-toggle").addEventListener("click",function(){game.powerups=!game.powerups;this.classList.toggle("active",game.powerups);this.setAttribute("aria-pressed",String(game.powerups));if(!game.powerups)game.orb=null;renderPowerStatus()});
   $$(".mode-tab").forEach((button)=>button.addEventListener("click",()=>{
     $$(".mode-tab").forEach((tab)=>tab.classList.toggle("selected",tab===button));
     game.mode=button.dataset.mode;
@@ -295,12 +453,11 @@
     const key=event.key.toLowerCase();
     if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
     keys.add(key);
-    if(key===" "&&$("#page-onevone").classList.contains("active")&&game.running&&game.powerups)game.boost=230;
     if(game.qteTimer>0&&$("#page-onevone").classList.contains("active")&&["w","a","s","d"].includes(key)){
       if(key===game.qteSequence[game.qteIndex])game.qteIndex++;
       else game.qteIndex=key===game.qteSequence[0]?1:0;
       $$("#qte-key kbd").forEach((letter,index)=>letter.classList.toggle("current",index===game.qteIndex));
-      if(game.qteIndex===game.qteSequence.length){game.qteTimer=0;game.boost=Math.max(game.boost,150);$("#qte-prompt").classList.remove("active");toast("Perfect combo — paddle boost!")}
+      if(game.qteIndex===game.qteSequence.length){game.qteTimer=0;game.paddleBoost.left=Math.max(game.paddleBoost.left,2.5);$("#qte-prompt").classList.remove("active");toast("Perfect combo — short paddle boost!")}
     }
   });
   document.addEventListener("keyup",(event)=>keys.delete(event.key.toLowerCase()));
