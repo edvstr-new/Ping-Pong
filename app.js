@@ -51,7 +51,7 @@
     {title:"Movement & controls",short:"Find your feet",body:"Use W and S only to move your paddle up and down. Press A to tilt it right (front edge up) or D to tilt it left (front edge down). In local matches, Player 2 uses the arrow keys the same way: up/down to move and left/right to tilt."},
     {title:"The perfect return",short:"Meet the ball",body:"A return is more than a save. The point where the ball hits your paddle changes its angle: hit near the center for a steady shot, or near an edge to send it wide."},
     {title:"Paddle tilt",short:"Shape the angle",body:"Moving your paddle tilts it by a full 45 degrees. Meet the ball while moving to add spin and shape a sharper return. The tilt is bold, so time your movement deliberately."},
-    {title:"Powerups",short:"Claim an orb",body:"Glowing orbs spawn on the center line. The last player to hit the ball claims the orb's power: fastball, slowball, a double-size paddle, or a split double ball. Each power lasts up to ten seconds."},
+    {title:"Powerups",short:"Claim an orb",body:"Glowing orbs spawn on the center line. The last player to hit the ball claims its power: fastball, a double-size paddle, or a split double ball. Slowball is sent to the opponent, making their next shot easier to return. Each power lasts up to ten seconds."},
     {title:"Quick time events",short:"React on cue",body:"Watch for a QTE cue during high-pressure rallies. Press the full random combination of W, A, S, and D keys in the order shown before time runs out to steady your return."},
     {title:"Read the rally",short:"Think ahead",body:"The ball reflects off the court walls. Track its angle and speed to predict where it will meet your paddle. Mix up your own return to keep the opponent guessing."}
   ];
@@ -250,7 +250,9 @@
   function awardPowerup(side,type){
     if(type==="paddle")game.paddleBoost[side]=10;
     else game.powers[side]={type,timer:10};
-    toast(`${side==="left"?"You":"CPU"} claimed ${powerupTypes[type].name}!`);
+    toast(type==="slow"
+      ?`${side==="left"?"CPU":"You"} sent a SLOWBALL to ${side==="left"?"you":"the CPU"}!`
+      :`${side==="left"?"You":"CPU"} claimed ${powerupTypes[type].name}!`);
     renderPowerStatus();
   }
   function splitDoubleBall(ball,side){
@@ -262,9 +264,11 @@
       type,powerOwner:side,powerTimer:10,baseSpeed:speed
     });
     ball.type="splitFast";ball.powerOwner=side;ball.powerTimer=10;ball.baseSpeed=speed;
-    ball.vx=forward*Math.cos(splitAngle-.3)*speed*1.35;
-    ball.vy=Math.sin(splitAngle-.3)*speed*1.35;
-    game.extraBalls.push(launch(splitAngle+.3,"splitSlow"));
+    ball.vx=forward*Math.cos(splitAngle-.3)*speed*1.2;
+    ball.vy=Math.sin(splitAngle-.3)*speed*1.2;
+    const slowBall=launch(splitAngle+.3,"splitSlow");
+    slowBall.vx*=.85;slowBall.vy*=.85;slowBall.baseSpeed*=.85;
+    game.extraBalls.push(slowBall);
   }
   function hitPaddle(ball,side){
     const ownPower=game.powers[side];
@@ -334,7 +338,9 @@
       }}
       for(const ball of game.balls.concat(game.extraBalls)){
         if(game.orb&&Math.hypot(ball.x-game.orb.x,ball.y-game.orb.y)<=pongBallRadius+powerupOrbRadius){
-          const {type}=game.orb;game.orb=null;game.orbSpawnTimer=3+Math.random()*4;awardPowerup(game.lastHit,type);
+          const {type}=game.orb;game.orb=null;game.orbSpawnTimer=3+Math.random()*4;
+          const side=type==="slow"?(game.lastHit==="left"?"right":"left"):game.lastHit;
+          awardPowerup(side,type);
         }
       }
     }else game.orb=null;
@@ -478,24 +484,38 @@
   ];
   let evolution=null;
   const evoCanvas=$("#evo-canvas"),evoCtx=evoCanvas.getContext("2d");
-  const evoSim={ballX:300,ballY:115,vx:4.7,vy:2.4,left:115,right:115,scoreLeft:0,scoreRight:0,pause:0,last:0,matchPause:0};
+  const evoSim={ballX:300,ballY:115,vx:4.7,vy:2.4,left:115,right:115,leftTilt:0,rightTilt:0,scoreLeft:0,scoreRight:0,pause:0,last:0,matchPause:0,orb:null,orbTimer:4,boost:0,extraBalls:[],lastHit:"left"};
   function drawEvolution(){
     const c=evoCtx,w=evoCanvas.width,h=evoCanvas.height;
     c.clearRect(0,0,w,h);c.fillStyle="#0b1118";c.fillRect(0,0,w,h);
     c.strokeStyle="#34404e";c.setLineDash([5,8]);c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.stroke();c.setLineDash([]);
-    c.fillStyle="#a4f6b1";c.shadowColor="#a4f6b1";c.shadowBlur=10;c.fillRect(22,evoSim.left-23,7,46);
-    c.fillStyle="#9aa7b8";c.shadowColor="#a4aebc";c.fillRect(w-29,evoSim.right-23,7,46);
-    c.fillStyle="#e8fff3";c.shadowColor="#a4f6b1";c.beginPath();c.arc(evoSim.ballX,evoSim.ballY,5,0,Math.PI*2);c.fill();c.shadowBlur=0;
+    c.fillStyle="#a4f6b1";c.shadowColor="#a4f6b1";c.shadowBlur=10;c.save();c.translate(25,evoSim.left);c.rotate(evoSim.leftTilt);c.fillRect(-3.5,-(evoSim.boost>0?30:23),7,evoSim.boost>0?60:46);c.restore();
+    c.fillStyle="#9aa7b8";c.shadowColor="#a4aebc";c.save();c.translate(w-25,evoSim.right);c.rotate(evoSim.rightTilt);c.fillRect(-3.5,-23,7,46);c.restore();
+    for(const ball of [{x:evoSim.ballX,y:evoSim.ballY},...evoSim.extraBalls]){
+      c.fillStyle="#e8fff3";c.shadowColor="#a4f6b1";c.beginPath();c.arc(ball.x,ball.y,5,0,Math.PI*2);c.fill();
+    }
+    if(evoSim.orb){c.fillStyle="#c5adff";c.shadowColor="#c5adff";c.beginPath();c.arc(evoSim.orb.x,evoSim.orb.y,9,0,Math.PI*2);c.fill();c.shadowBlur=0;c.fillStyle="#171522";c.font="bold 8px monospace";c.textAlign="center";c.textBaseline="middle";c.fillText(evoSim.orb.type==="paddle"?"2×":evoSim.orb.type==="double"?"×2":evoSim.orb.type==="fast"?"F":"S",evoSim.orb.x,evoSim.orb.y)}
+    c.shadowBlur=0;
     c.fillStyle="#718091";c.font="10px monospace";c.textAlign="center";c.fillText(`${evoSim.scoreLeft}  :  ${evoSim.scoreRight}`,w/2,17);
     if(!evolution){c.fillStyle="#a4f6b1";c.font="11px monospace";c.fillText("START A CAREER TO WATCH YOUR AI PLAY",w/2,h-15)}
   }
   function resetEvolutionBall(direction=Math.random()<.5?-1:1){
     evoSim.ballX=evoCanvas.width/2;evoSim.ballY=evoCanvas.height/2;
     evoSim.vx=direction*(4+Math.random()*1.1);evoSim.vy=(Math.random()-.5)*5;
+    evoSim.extraBalls=[];evoSim.lastHit=direction>0?"left":"right";
     evoSim.pause=26;
   }
-  function finishEvolutionPoint(){
-    if(evoSim.ballX<0)evoSim.scoreRight++;else evoSim.scoreLeft++;
+  function rewardEvolution(cash,xp){
+    if(!evolution)return;
+    evolution.cash+=cash;evolution.xp+=xp;
+    $("#evo-cash").textContent=Math.floor(evolution.cash);
+    const level=1+Math.floor(evolution.xp/100),progress=Math.floor(evolution.xp%100);
+    $("#evo-level").textContent=`LEVEL ${level} · ${level<3?"NOVICE":level<6?"COMPETITOR":"ACE"}`;
+    $("#evo-xp-label").textContent=`${progress} / 100 XP`;$("#evo-xp-bar").style.width=`${progress}%`;
+    saveEvolution();
+  }
+  function finishEvolutionPoint(ball){
+    if(ball.x<0)evoSim.scoreRight++;else{evoSim.scoreLeft++;rewardEvolution(5,4);$("#evo-reward-status").textContent="AI scored · +¢5 and +4 XP."}
     if(evoSim.scoreLeft>=5||evoSim.scoreRight>=5){
       const won=evoSim.scoreLeft>evoSim.scoreRight,reward=12+(evolution.upgrades.learning||0)*3;
       if(won){evolution.wins++;evolution.cash+=reward;evolution.xp+=24+(evolution.upgrades.learning||0)*4}
@@ -519,11 +539,36 @@
         evoSim.left+=Math.max(-leftSpeed,Math.min(leftSpeed,leftTarget-evoSim.left))*dt;
         evoSim.right+=Math.max(-3.8,Math.min(3.8,rivalTarget-evoSim.right))*dt;
         evoSim.left=Math.max(24,Math.min(h-24,evoSim.left));evoSim.right=Math.max(24,Math.min(h-24,evoSim.right));
-        evoSim.ballX+=evoSim.vx*dt;evoSim.ballY+=evoSim.vy*dt;
-        if(evoSim.ballY<5||evoSim.ballY>h-5)evoSim.vy*=-1;
-        if(evoSim.vx<0&&evoSim.ballX<=38&&Math.abs(evoSim.ballY-evoSim.left)<27+(upgrade.range||0)*1.3){evoSim.ballX=39;evoSim.vx=Math.abs(evoSim.vx)*1.025;evoSim.vy+=(evoSim.ballY-evoSim.left)*.045}
-        if(evoSim.vx>0&&evoSim.ballX>=w-38&&Math.abs(evoSim.ballY-evoSim.right)<27){evoSim.ballX=w-39;evoSim.vx=-Math.abs(evoSim.vx)*1.025;evoSim.vy+=(evoSim.ballY-evoSim.right)*.04}
-        if(evoSim.ballX<0||evoSim.ballX>w)finishEvolutionPoint();
+        evoSim.leftTilt=evoSim.ballX<w*.52?(evoSim.ballY<evoSim.left?Math.PI/4:-Math.PI/4):0;
+        evoSim.rightTilt=evoSim.ballX>w*.48?(evoSim.ballY<evoSim.right?-Math.PI/8:Math.PI/8):0;
+        evoSim.boost=Math.max(0,evoSim.boost-dt/60);
+        const balls=[{x:evoSim.ballX,y:evoSim.ballY,vx:evoSim.vx,vy:evoSim.vy,lastHit:evoSim.lastHit},...evoSim.extraBalls];
+        if(!evoSim.orb){evoSim.orbTimer-=dt/60;if(evoSim.orbTimer<=0)evoSim.orb={x:w/2,y:24+Math.random()*(h-48),type:["fast","slow","paddle","double"][Math.floor(Math.random()*4)]}}
+        let pointEnded=false;
+        for(const ball of balls){
+          ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+          if(ball.y<5||ball.y>h-5){ball.y=Math.max(5,Math.min(h-5,ball.y));ball.vy*=-1}
+          const leftHeight=evoSim.boost>0?60:46+(upgrade.range||0)*2.6;
+          if(ball.vx<0&&ball.x<=38&&Math.abs(ball.y-evoSim.left)<leftHeight/2){
+            ball.x=39;ball.vx=Math.abs(ball.vx)*1.025;ball.vy+=(ball.y-evoSim.left)*.045+Math.sin(evoSim.leftTilt)*.8;ball.lastHit="left";
+            rewardEvolution(2,1);$("#evo-reward-status").textContent="AI returned the ball · +¢2 and +1 XP.";
+          }
+          if(ball.vx>0&&ball.x>=w-38&&Math.abs(ball.y-evoSim.right)<27){
+            ball.x=w-39;ball.vx=-Math.abs(ball.vx)*1.025;ball.vy+=(ball.y-evoSim.right)*.04+Math.sin(evoSim.rightTilt)*.4;ball.lastHit="right";
+          }
+          if(evoSim.orb&&Math.hypot(ball.x-evoSim.orb.x,ball.y-evoSim.orb.y)<=14){
+            const type=evoSim.orb.type;evoSim.orb=null;evoSim.orbTimer=5+Math.random()*4;
+            if(ball.lastHit==="left"){
+              rewardEvolution(8,5);$("#evo-reward-status").textContent=`AI collected ${type.toUpperCase()} · +¢8 and +5 XP.`;
+              if(type==="fast"||type==="slow"){const factor=type==="fast"?1.25:.8;ball.vx*=factor;ball.vy*=factor}
+              else if(type==="paddle")evoSim.boost=8;
+              else balls.push({x:ball.x,y:ball.y,vx:ball.vx,vy:-ball.vy,lastHit:"left"});
+            }
+          }
+          if(ball.x<0||ball.x>w){finishEvolutionPoint(ball);pointEnded=true;break}
+          if(ball===balls[0]){evoSim.ballX=ball.x;evoSim.ballY=ball.y;evoSim.vx=ball.vx;evoSim.vy=ball.vy;evoSim.lastHit=ball.lastHit}
+        }
+        if(!pointEnded)evoSim.extraBalls=balls.slice(1).filter((ball)=>ball.x>=0&&ball.x<=w);
       }
       drawEvolution();
     }
@@ -597,13 +642,13 @@
   drawEvolution();
 
   const world=(()=>{
-    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],inventory:[],activeJob:null,tutorialDone:false};
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],inventory:[],activeJob:null,tutorialDone:false};
     try{
       const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
       if(saved&&saved.format==="pong-world-save"&&saved.version===1)return{...defaults,...saved,
         recruits:Array.isArray(saved.recruits)?saved.recruits:[],openedLoot:Array.isArray(saved.openedLoot)?saved.openedLoot:[],
         inspected:Array.isArray(saved.inspected)?saved.inspected:[],talkedTo:Array.isArray(saved.talkedTo)?saved.talkedTo:[],
-        completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
+        completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
     }catch(error){console.error("Could not load Pong World save.",error)}
     return defaults;
   })();
@@ -615,10 +660,11 @@
     job:["Courier Board","Sparring Yard","Salvage Crew","Rally Workshop"],
     cache:["Supply Cache","Buried Locker","Lost Crate","Glowing Stash"],
     npc:["Rally Scout","Paddle Mechanic","Wandering Ace","Court Drifter","Rookie Bot"],
-    duel:["Open Court","Doubles Arena","Rival Camp","Street Court"]
+    duel:["Open Court","Rival Court","Boss Gate","Street Court"]
   };
   const worldColors={structure:"#93baff",job:"#ffcf77",cache:"#a4f6b1",npc:"#c5adff",duel:"#ff9b72"};
   const worldTypes=["structure","job","cache","npc","duel"];
+  let worldInterior=null;
   function worldHash(x,y,salt=0){
     let value=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(world.seed|0,1442695041)+salt;
     value=Math.imul(value^(value>>>13),1274126177);
@@ -640,7 +686,7 @@
           used.add(key);
           const type=worldTypes[Math.floor(random()*worldTypes.length)];
           const names=worldNames[type],siteX=rx*regionSize+localX,siteY=ry*regionSize+localY;
-          sites.push({id:`${world.seed}:${rx}:${ry}:${index}`,x:siteX,y:siteY,type,name:names[Math.floor(random()*names.length)],recruitable:type==="npc"&&random()<.58,jobKind:["courier","scavenger","sparring"][Math.floor(random()*3)]});
+          sites.push({id:`${world.seed}:${rx}:${ry}:${index}`,x:siteX,y:siteY,type,name:names[Math.floor(random()*names.length)],dungeon:type==="structure"&&worldHash(siteX,siteY,411)%5===0,recruitable:type==="npc"&&random()<.58,jobKind:["courier","scavenger","sparring"][Math.floor(random()*3)]});
         }
       }
     }
@@ -649,6 +695,18 @@
   function nearestWorldSite(){
     return worldSitesNear(world.x,world.y).map((site)=>({...site,distance:Math.abs(site.x-world.x)+Math.abs(site.y-world.y)}))
       .filter((site)=>site.distance<=1).sort((a,b)=>a.distance-b.distance)[0]||null;
+  }
+  function updateWorldActions(){
+    const interact=$("#world-interact"),battle=$("#world-battle");
+    if(worldInterior){
+      const atExit=worldInterior.playerX===4&&worldInterior.playerY>=5;
+      interact.innerHTML=atExit?"LEAVE STRUCTURE&nbsp; <kbd>E</kbd>":"EXPLORE / TALK&nbsp; <kbd>E</kbd>";
+      battle.hidden=!worldInterior.dungeon||world.defeatedBosses.includes(worldInterior.site.id);
+      battle.textContent="CHALLENGE DUNGEON BOSS  ↗";
+      return;
+    }
+    interact.innerHTML="TALK / INTERACT&nbsp; <kbd>E</kbd>";
+    battle.hidden=false;battle.textContent="OPEN 1V1 MATCH&nbsp; ↗";
   }
   function saveWorld(){
     localStorage.setItem(WORLD_KEY,JSON.stringify(world));
@@ -678,10 +736,40 @@
     }else{
       c.strokeRect(x+5,y+5,30,30);c.strokeRect(x+10,y+10,20,20);c.fillRect(x+17,y+17,6,6);
     }
-    c.shadowBlur=0;c.fillStyle="#e7edf4";c.font="8px monospace";c.textAlign="center";c.fillText(site.name.toUpperCase(),x+20,y+39);c.restore();
+    c.shadowBlur=0;c.fillStyle="#e7edf4";c.font="8px monospace";c.textAlign="center";c.fillText(site.name.toUpperCase(),x+20,y+39);
+    if(site.dungeon){c.fillStyle="#ff9b72";c.font="bold 7px monospace";c.fillText("DUNGEON",x+20,y+48)}
+    c.restore();
+  }
+  function drawWorldInterior(){
+    const c=worldCtx,w=worldCanvas.width,h=worldCanvas.height,room=worldInterior;
+    c.clearRect(0,0,w,h);c.fillStyle="#10151d";c.fillRect(0,0,w,h);
+    c.fillStyle="#292b35";c.fillRect(140,46,520,408);
+    c.fillStyle=room.dungeon?"#27202b":"#202b2a";c.fillRect(160,66,480,368);
+    for(let y=0;y<7;y++)for(let x=0;x<9;x++){
+      c.fillStyle=(x+y)%2?"#293036":"#30373b";c.fillRect(180+x*48,78+y*48,46,46);
+    }
+    c.fillStyle="#11161d";c.fillRect(360,414,80,40);
+    c.fillStyle="#86929e";c.font="10px monospace";c.textAlign="center";c.fillText("EXIT",400,444);
+    if(room.dungeon&&!world.defeatedBosses.includes(room.site.id)){
+      c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.shadowBlur=18;c.beginPath();c.arc(396,202,18,0,Math.PI*2);c.fill();c.shadowBlur=0;
+      c.fillStyle="#15151b";c.font="bold 9px monospace";c.fillText("BOSS",396,205);
+    }else{
+      c.fillStyle="#93baff";c.fillRect(365,178,70,42);c.fillStyle="#151b22";c.font="bold 9px monospace";c.fillText(room.dungeon?"CLEARED":"SAFE ROOM",400,202);
+    }
+    const px=204+room.playerX*48,py=102+room.playerY*48;
+    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=12;c.beginPath();c.arc(px,py,11,0,Math.PI*2);c.fill();c.shadowBlur=0;
+    c.fillStyle="#e8fff9";c.font="bold 9px monospace";c.fillText(room.dungeon?"DUNGEON · BOSS INSIDE":room.site.name.toUpperCase(),400,31);
+    c.fillStyle="#84919f";c.font="9px monospace";c.fillText("MOVE WITH WASD · E NEAR THE DOOR TO EXIT",400,477);
+    $("#world-location").textContent=room.dungeon?"DUNGEON INTERIOR":`${room.site.name.toUpperCase()} · INTERIOR`;
+    $("#world-message").textContent=room.dungeon
+      ?world.defeatedBosses.includes(room.site.id)?"The boss is defeated. The glowing entrance at the bottom leads back outside.":"A boss blocks the far end of this room. Move close and press E to challenge it; press E near the exit to leave."
+      :"You are inside a bounded structure. Explore the room, then move to the marked exit and press E.";
+    updateWorldStats();$("#world-location").textContent=room.dungeon?"DUNGEON INTERIOR":`${room.site.name.toUpperCase()} · INTERIOR`;
+    updateWorldActions();
   }
   function drawWorld(){
     const c=worldCtx;if(!c)return;
+    if(worldInterior){drawWorldInterior();return}
     const halfCols=Math.ceil(worldCanvas.width/tile/2)+1,halfRows=Math.ceil(worldCanvas.height/tile/2)+1;
     c.clearRect(0,0,worldCanvas.width,worldCanvas.height);
     for(let dy=-halfRows;dy<=halfRows;dy++)for(let dx=-halfCols;dx<=halfCols;dx++){
@@ -701,8 +789,9 @@
     c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=15;c.beginPath();c.arc(playerX,playerY-5,8,0,Math.PI*2);c.fill();
     c.fillRect(playerX-7,playerY+3,14,14);c.shadowBlur=0;c.fillStyle="#10211f";c.fillRect(playerX-3,playerY-7,2,2);c.fillRect(playerX+2,playerY-7,2,2);
     const nearby=nearestWorldSite();
-    $("#world-message").textContent=nearby?`${nearby.name} nearby — press E to ${nearby.type==="duel"?"challenge the crew":nearby.type==="cache"?"open it":"interact"}.`:`New ground, new possibilities. Keep exploring.`;
+    $("#world-message").textContent=nearby?`${nearby.name}${nearby.dungeon?" · DUNGEON":""} nearby. Press the large interact button or E to ${nearby.dungeon?"enter and challenge its boss":nearby.type==="duel"?"start a 1v1 match":nearby.type==="cache"?"open it":nearby.type==="npc"?"talk":"interact"}.`:`New ground, new possibilities. Move with WASD. Press E near a landmark to interact.`;
     updateWorldStats();
+    updateWorldActions();
   }
   function finishWorldJob(){
     const job=world.activeJob;if(!job||job.progress<job.goal)return;
@@ -721,16 +810,35 @@
     const definitions={
       courier:{name:"Long-haul courier",goal:8,reward:14},
       scavenger:{name:"Salvage collection",goal:2,reward:18},
-      sparring:{name:"Doubles sparring",goal:1,reward:22}
+      sparring:{name:"Rival sparring",goal:1,reward:22}
     };
     const details=definitions[kind],job={id:site.id,kind,name:details.name,goal:details.goal,progress:0,reward:details.reward};
-    world.activeJob=job;$("#world-message").textContent=`Contract accepted: ${job.name}. ${kind==="courier"?"Travel 8 tiles.":kind==="scavenger"?"Open 2 supply caches.":"Win a 2v2 duel."}`;
+    world.activeJob=job;$("#world-message").textContent=`Contract accepted: ${job.name}. ${kind==="courier"?"Travel 8 tiles.":kind==="scavenger"?"Open 2 supply caches.":"Win a 1v1 duel."}`;
     saveWorld();updateWorldStats();
   }
+  function enterWorldStructure(site){
+    worldInterior={site,dungeon:site.dungeon,playerX:4,playerY:6};
+    toast(site.dungeon?"Dungeon discovered · find the boss inside":"Entering structure");
+    drawWorld();
+  }
   function interactWorld(){
+    if(worldInterior){
+      const {site,dungeon,playerX,playerY}=worldInterior;
+      if(dungeon&&!world.defeatedBosses.includes(site.id)&&Math.abs(playerX-4)+Math.abs(playerY-2)<=1){
+        openWorldBattle(site,true);return;
+      }
+      if(playerX===4&&playerY>=5){
+        worldInterior=null;drawWorld();$("#world-message").textContent=`You stepped outside ${site.name}. Press E near another marker to interact.`;return;
+      }
+      $("#world-message").textContent=dungeon
+        ?world.defeatedBosses.includes(site.id)?"The dungeon is clear. Return to the entrance and press E to leave.":"A boss blocks the northern chamber. Move close to it and press E to begin the fight."
+        :`Inside ${site.name}, old markings point toward the exit. Explore the room, or return to the entrance and press E to leave.`;
+      return;
+    }
     const site=nearestWorldSite();
     if(!site){$("#world-message").textContent="Nothing close enough to interact with. Explore in any direction.";return}
-    if(site.type==="duel"){openWorldBattle(site);return}
+    if(site.type==="structure"){enterWorldStructure(site);return}
+    if(site.type==="duel"){openWorldBattle(site,false);return}
     if(site.type==="job"){offerWorldJob(site);return}
     if(site.type==="cache"){
       if(world.openedLoot.includes(site.id)){$("#world-message").textContent="This cache has already been looted. There are more out there.";return}
@@ -740,9 +848,9 @@
       toast(`Loot found · ${loot} · +${tokens} tokens`);saveWorld();updateWorldStats();drawWorld();return;
     }
     if(site.type==="npc"){
-      if(world.recruits.includes(site.id)){$("#world-message").textContent=`${site.name} is already in your crew and ready to play.`;return}
+      if(world.recruits.includes(site.id)){$("#world-message").textContent=`${site.name} is already part of your travel crew.`;return}
       if(site.recruitable&&world.recruits.length<4){
-        world.recruits.push(site.id);world.talkedTo.push(site.id);$("#world-message").textContent=`${site.name} joined your crew. They'll take the second paddle in your next 2v2 duel.`;
+        world.recruits.push(site.id);world.talkedTo.push(site.id);$("#world-message").textContent=`${site.name} joined your travel crew. Keep exploring to find more people and hidden courts.`;
         toast(`${site.name} joined your AI crew!`);
       }else if(!world.talkedTo.includes(site.id)){
         world.talkedTo.push(site.id);offerWorldJob(site,"courier");
@@ -758,16 +866,21 @@
     saveWorld();updateWorldStats();
   }
   function moveWorld(dx,dy){
+    if(worldInterior){
+      worldInterior.playerX=Math.max(1,Math.min(7,worldInterior.playerX+dx));
+      worldInterior.playerY=Math.max(1,Math.min(6,worldInterior.playerY+dy));
+      drawWorld();return;
+    }
     world.x+=dx;world.y+=dy;
     if(world.activeJob?.kind==="courier"){world.activeJob.progress++;finishWorldJob()}
     saveWorld();drawWorld();
   }
   const tutorialSteps=[
     "Move with W, A, S, D or the arrow keys. The camera follows you, and new territory keeps appearing in every direction.",
-    "Walk next to a person, structure, job board, supply cache, or court and press E to interact. The nearby landmark is named above the map.",
-    "Job boards offer courier, salvage, and sparring contracts. Complete the task to earn tokens; caches have randomized loot.",
-    "Talk to the locals. Some wandering players can join your crew and play as your AI teammate in a doubles match.",
-    "Find a doubles arena or press START A 2V2 DUEL. You control one paddle with W/S; your teammate and two rivals finish the court."
+    "Walk next to a person, structure, job board, supply cache, or court. Press the large TALK / INTERACT button or E, then read the dialogue below the map.",
+    "Structures open into bounded rooms. Some are dungeons: move to the boss marker and press E to begin a boss match; return to the entrance to leave.",
+    "Job boards offer courier, salvage, and 1v1 sparring contracts. Complete the task to earn tokens; caches have randomized loot.",
+    "Challenge rival courts in one-on-one matches. Move with W/S, tilt with A/D, collect powerups, and land quicktime combos."
   ];
   let tutorialStep=0;
   function renderWorldTutorial(){
@@ -784,85 +897,212 @@
   });
   $("#world-tutorial-close").addEventListener("click",()=>$("#world-tutorial-controls").classList.add("hidden"));
   $("#world-interact").addEventListener("click",interactWorld);
-  $("#world-battle").addEventListener("click",()=>openWorldBattle(null));
+  $("#world-battle").addEventListener("click",()=>{
+    if(worldInterior?.dungeon)openWorldBattle(worldInterior.site,true);
+    else openWorldBattle(null,false);
+  });
 
-  const worldBattle={running:false,active:false,left:90,ally:270,right:90,rival:270,ballX:400,ballY:180,vx:5,vy:2.5,scoreLeft:0,scoreRight:0,last:0,pointPause:0,allyAI:false};
+  const worldBattle={running:false,active:false,left:180,right:180,leftTilt:0,rightTilt:0,ball:{x:400,y:180,vx:5,vy:2.5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0},extraBalls:[],scoreLeft:0,scoreRight:0,last:0,pointPause:0,lastHit:"left",rallies:0,orb:null,orbTimer:2,powers:{left:null,right:null},boosts:{left:0,right:0},powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,qteStage:0,boss:false,bossStage:0,bossTarget:0,bossHealth:3,site:null};
+  function allWorldBattleBalls(){return [worldBattle.ball,...worldBattle.extraBalls]}
   function drawWorldBattle(){
     const c=worldBattleCtx;if(!c)return;
     const w=worldBattleCanvas.width,h=worldBattleCanvas.height;
     c.clearRect(0,0,w,h);c.fillStyle="#0b1119";c.fillRect(0,0,w,h);
     c.strokeStyle="#293544";c.setLineDash([6,9]);c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.stroke();c.setLineDash([]);
-    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.fillRect(25,worldBattle.left-26,8,52);c.fillRect(64,worldBattle.ally-26,8,52);
-    c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.fillRect(w-33,worldBattle.right-26,8,52);c.fillRect(w-72,worldBattle.rival-26,8,52);
-    c.fillStyle="#edfff9";c.shadowColor="#7df2e3";c.beginPath();c.arc(worldBattle.ballX,worldBattle.ballY,7,0,Math.PI*2);c.fill();c.shadowBlur=0;
+    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.save();c.translate(30,worldBattle.left);c.rotate(worldBattle.leftTilt);c.fillRect(-5,-(worldBattle.boosts.left>0?42:27),10,worldBattle.boosts.left>0?84:54);c.restore();
+    c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.save();c.translate(w-30,worldBattle.right);c.rotate(worldBattle.rightTilt);c.fillRect(-5,-(worldBattle.boosts.right>0?42:27),10,worldBattle.boosts.right>0?84:54);c.restore();
+    for(const ball of allWorldBattleBalls()){
+      c.fillStyle=ball.type==="fast"||ball.type==="splitFast"?"#ffe3a3":ball.type==="slow"||ball.type==="splitSlow"?"#b9d8ff":"#edfff9";
+      c.shadowColor=ball.type==="fast"||ball.type==="splitFast"?"#ffcf77":ball.type==="slow"||ball.type==="splitSlow"?"#93baff":"#7df2e3";
+      c.beginPath();c.arc(ball.x,ball.y,7,0,Math.PI*2);c.fill();
+    }
+    if(worldBattle.orb){
+      const colors={fast:"#ffcf77",slow:"#93baff",paddle:"#a4f6b1",double:"#c5adff"};
+      c.fillStyle=colors[worldBattle.orb.type];c.shadowColor=c.fillStyle;c.shadowBlur=16;c.beginPath();c.arc(worldBattle.orb.x,worldBattle.orb.y,20,0,Math.PI*2);c.fill();
+      c.shadowBlur=0;c.fillStyle="#10141e";c.font="bold 13px monospace";c.textAlign="center";c.textBaseline="middle";
+      c.fillText(worldBattle.orb.type==="paddle"?"2×":worldBattle.orb.type==="double"?"×2":worldBattle.orb.type==="fast"?"F":"S",worldBattle.orb.x,worldBattle.orb.y);
+    }
+    c.shadowBlur=0;
   }
   function resetWorldBall(direction=Math.random()<.5?-1:1){
-    worldBattle.ballX=worldBattleCanvas.width/2;worldBattle.ballY=worldBattleCanvas.height/2;
-    worldBattle.vx=direction*(4.4+Math.random()*1.2);worldBattle.vy=(Math.random()-.5)*5;
-    worldBattle.pointPause=35;
+    const speed=4.4+Math.random()*1.2;
+    worldBattle.ball={x:worldBattleCanvas.width/2,y:worldBattleCanvas.height/2,vx:direction*speed,vy:(Math.random()-.5)*5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0};
+    worldBattle.extraBalls=[];worldBattle.orb=null;worldBattle.orbTimer=2+Math.random()*2;
+    worldBattle.powers={left:null,right:null};worldBattle.boosts={left:0,right:0};worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.rallies=0;worldBattle.lastHit=direction>0?"left":"right";
+    worldBattle.pointPause=35;$("#world-battle-qte").classList.add("hidden");
   }
-  function openWorldBattle(site){
-    worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=90;worldBattle.ally=270;worldBattle.right=90;worldBattle.rival=270;
-    worldBattle.allyAI=world.recruits.length>0;
-    $("#world-battle-title").textContent=site?`${site.name.toUpperCase()} · 2V2`:"OPEN CHALLENGE · 2V2";
-    $("#world-battle-message").textContent=worldBattle.allyAI?"Your recruited AI teammate has the second paddle. Use W/S to play.":"Use W/S and ↑/↓ to control both teammates. First team to 5 wins.";
-    $("#world-battle-start").textContent="START DUEL  ↗";$("#world-battle-start").disabled=false;
-    $("#world-battle-overlay").classList.remove("hidden");
-    $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";resetWorldBall();drawWorldBattle();
+  function startWorldQte(stage=0){
+    worldBattle.qteSequence=randomQteSequence();worldBattle.qteIndex=0;worldBattle.qteTimer=6;worldBattle.qteStage=stage;
+    const label=worldBattle.boss?`BOSS TRIPLE HIT · ${stage===1?"HIT 1 / 3":stage===2?"HIT 2 / 3":"HIT 3 / 3"}`:"QUICK RETURN";
+    $("#world-battle-qte").innerHTML=`<span>${label}</span>${worldBattle.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("")}`;
+    $("#world-battle-qte").classList.remove("hidden");
+    $("#world-battle-message").textContent=worldBattle.boss?"Time slows while you line up the next hit. Enter the keys in order.":"Time slowed! Complete the combo for a bigger paddle and faster return.";
   }
-  function finishWorldBattlePoint(){
-    if(worldBattle.ballX<0)worldBattle.scoreRight++;else worldBattle.scoreLeft++;
+  function completeWorldQte(success){
+    $("#world-battle-qte").classList.add("hidden");worldBattle.qteTimer=0;
+    if(!success){worldBattle.bossStage=0;$("#world-battle-message").textContent="Combo missed. The rally continues.";return}
+    worldBattle.boosts.left=Math.max(worldBattle.boosts.left,2.5);
+    if(worldBattle.boss){
+      if(worldBattle.qteStage===1){
+        worldBattle.bossStage=2;worldBattle.bossTarget=worldBattleCanvas.width*.375;
+        worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.12;worldBattle.ball.vy*=1.08;
+        $("#world-battle-message").textContent="HIT 1 LANDED · follow the ball to the halfway mark!";
+      }else if(worldBattle.qteStage===2){
+        worldBattle.bossStage=3;worldBattle.bossTarget=worldBattleCanvas.width/2;
+        worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.08;
+        $("#world-battle-message").textContent="HIT 2 LANDED · one final strike on the center line!";
+      }else{
+        worldBattle.bossHealth--;worldBattle.bossStage=0;
+        $("#world-battle-message").textContent=`TRIPLE HIT! BOSS HEALTH: ${worldBattle.bossHealth} / 3`;
+        if(worldBattle.bossHealth<=0){finishWorldBattle(true);return}
+        worldBattle.ball.x=worldBattleCanvas.width/2+8;worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.2;
+      }
+    }else{
+      const speed=Math.hypot(worldBattle.ball.vx,worldBattle.ball.vy);
+      worldBattle.ball.vx*=Math.min(1.2,(speed+1.5)/speed);worldBattle.ball.vy*=Math.min(1.2,(speed+1.5)/speed);
+      $("#world-battle-message").textContent="Perfect combo · temporary paddle boost and faster shot!";
+    }
+  }
+  function giveWorldBattlePower(side,type){
+    if(type==="paddle")worldBattle.boosts[side]=10;
+    else worldBattle.powers[side]={type,timer:10};
+    const receiver=side==="left"?"you":"the rival";
+    $("#world-battle-message").textContent=type==="slow"?`SLOWBALL sent to ${receiver} — their next shot will be easier to return.`:`${side==="left"?"You":"The rival"} collected ${type.toUpperCase()}!`;
+    toast(type==="slow"?`SLOWBALL sent to ${receiver}!`:`${type.toUpperCase()} powerup collected!`);
+  }
+  function splitWorldBattleBall(ball,side){
+    const speed=Math.hypot(ball.vx,ball.vy),direction=side==="left"?1:-1,angle=Math.atan2(ball.vy,Math.abs(ball.vx));
+    ball.type="splitFast";ball.powerOwner=side;ball.powerTimer=10;ball.baseSpeed=speed;
+    ball.vx=direction*Math.cos(angle-.3)*speed*1.2;ball.vy=Math.sin(angle-.3)*speed*1.2;
+    worldBattle.extraBalls.push({x:ball.x,y:ball.y,vx:direction*Math.cos(angle+.3)*speed*.85,vy:Math.sin(angle+.3)*speed*.85,type:"splitSlow",powerOwner:side,powerTimer:10,baseSpeed:speed*.85});
+  }
+  function hitWorldBattlePaddle(ball,side){
+    const isPlayer=side==="left",paddleY=worldBattle[side],height=worldBattle.boosts[side]>0?84:54;
+    if(ball.type==="fast"&&ball.powerOwner!==side){
+      const speed=Math.hypot(ball.vx,ball.vy),base=ball.baseSpeed||speed/1.65;ball.vx*=base/speed;ball.vy*=base/speed;ball.type="normal";
+    }
+    if(ball.type==="slow"&&ball.powerOwner===side){
+      const speed=Math.hypot(ball.vx,ball.vy),base=ball.baseSpeed||speed/.55;ball.vx*=base/speed;ball.vy*=base/speed;ball.type="normal";
+    }
+    const contact=(ball.y-paddleY)/(height/2);
+    if(ball.type==="splitSlow"){
+      const speed=ball.baseSpeed||Math.hypot(ball.vx,ball.vy);
+      ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;ball.vx=(isPlayer?1:-1)*speed;ball.vy+=(ball.y-paddleY)*.035;
+    }else{
+      ball.vx=(isPlayer?1:-1)*Math.abs(ball.vx)*1.045;ball.vy+=contact*.11;
+    }
+    const power=worldBattle.powers[side];
+    if(power){
+      worldBattle.powers[side]=null;
+      if(power.type==="fast"){
+        const speed=Math.hypot(ball.vx,ball.vy);ball.baseSpeed=speed;ball.vx*=1.65;ball.vy*=1.65;ball.type="fast";ball.powerOwner=side;ball.powerTimer=power.timer;
+      }else if(power.type==="slow"){
+        const speed=Math.hypot(ball.vx,ball.vy);ball.baseSpeed=speed;ball.vx*=.55;ball.vy*=.55;ball.type="slow";ball.powerOwner=side;ball.powerTimer=power.timer;
+      }else if(power.type==="double")splitWorldBattleBall(ball,side);
+    }
+    worldBattle.lastHit=side;worldBattle.rallies++;
+    if(isPlayer){
+      if(worldBattle.boss)startWorldQte(1);
+      else if(worldBattle.rallies>=3&&Math.random()<.2)startWorldQte();
+    }
+  }
+  function awardWorldBattlePoint(missedSide){
+    if(missedSide==="left")worldBattle.scoreRight++;else worldBattle.scoreLeft++;
     $("#world-score-left").textContent=worldBattle.scoreLeft;$("#world-score-right").textContent=worldBattle.scoreRight;
     if(worldBattle.scoreLeft>=5||worldBattle.scoreRight>=5){
-      worldBattle.running=false;const won=worldBattle.scoreLeft>worldBattle.scoreRight;
-      if(won){world.wins++;world.tokens+=12;world.xp+=30;$("#world-battle-message").textContent="VICTORY! +12 tokens · your crew gets stronger.";
-        toast("2v2 duel won · +12 tokens");advanceWorldJob("sparring")}
-      else $("#world-battle-message").textContent="RIVAL CREW WINS. Regroup and challenge another court.";
-      $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;saveWorld();updateWorldStats();return;
+      finishWorldBattle(worldBattle.scoreLeft>worldBattle.scoreRight);return;
     }
-    resetWorldBall(worldBattle.ballX<0?1:-1);
+    resetWorldBall(missedSide==="left"?1:-1);
+  }
+  function finishWorldBattle(won){
+    worldBattle.running=false;
+    if(won){
+      world.wins++;const reward=worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.boss?60:30;
+      if(worldBattle.boss&&worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id))world.defeatedBosses.push(worldBattle.site.id);
+      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
+      toast(`Match won · +${reward} tokens`);advanceWorldJob("sparring");
+    }else $("#world-battle-message").textContent="RIVAL WINS. Regroup and challenge another court.";
+    $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;
+    saveWorld();updateWorldStats();updateWorldActions();drawWorld();
+  }
+  function openWorldBattle(site,boss=false){
+    worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;
+    worldBattle.boss=boss;worldBattle.bossStage=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;
+    $("#world-battle-title").textContent=boss?`${site.name.toUpperCase()} · BOSS`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
+    $("#world-battle-message").textContent=boss?"Land three triple-hit combos to defeat the boss. Each combo has three slowed-down QTE strikes.":"Move with W/S, tilt with A/D, and collect center-line powerups. First to 5 wins.";
+    $("#world-battle-start").textContent="START MATCH  ↗";$("#world-battle-start").disabled=false;
+    $("#world-battle-overlay").classList.remove("hidden");$("#world-score-left").textContent="0";$("#world-score-right").textContent="0";
+    resetWorldBall();drawWorldBattle();
   }
   $("#world-battle-start").addEventListener("click",()=>{
-    worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=90;worldBattle.ally=270;worldBattle.right=90;worldBattle.rival=270;worldBattle.running=true;
+    worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;worldBattle.running=true;
     $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";$("#world-battle-start").disabled=true;
-    $("#world-battle-message").textContent=worldBattle.allyAI?"YOU + AI TEAMMATE VS RIVAL DUO":"YOU + TEAMMATE VS RIVAL DUO";
+    $("#world-battle-message").textContent=worldBattle.boss?"Land three triple-hit combos. The QTE pauses the rally between strikes.":"First to 5 wins · collect powerups · A/D tilt.";
     resetWorldBall();drawWorldBattle();
   });
+  $("#world-battle-power-toggle").addEventListener("click",function(){
+    worldBattle.powerups=!worldBattle.powerups;this.textContent=`POWERUPS: ${worldBattle.powerups?"ON":"OFF"}`;this.setAttribute("aria-pressed",String(worldBattle.powerups));
+    if(!worldBattle.powerups)worldBattle.orb=null;
+  });
   $("#world-battle-close").addEventListener("click",()=>{
-    worldBattle.running=false;worldBattle.active=false;$("#world-battle-overlay").classList.add("hidden");
+    worldBattle.running=false;worldBattle.active=false;$("#world-battle-overlay").classList.add("hidden");$("#world-battle-qte").classList.add("hidden");drawWorld();
   });
   function worldBattleFrame(time){
     const dt=Math.min((time-worldBattle.last)/16.67||1,2.4);worldBattle.last=time;
     if(worldBattle.running&&$("#page-world").classList.contains("active")){
-      const speed=5.2*dt,h=worldBattleCanvas.height;
-      if(keys.has("w"))worldBattle.left=Math.max(27,worldBattle.left-speed);
-      if(keys.has("s"))worldBattle.left=Math.min(h-27,worldBattle.left+speed);
-      if(!worldBattle.allyAI){
-        if(keys.has("arrowup"))worldBattle.ally=Math.max(27,worldBattle.ally-speed);
-        if(keys.has("arrowdown"))worldBattle.ally=Math.min(h-27,worldBattle.ally+speed);
-      }else worldBattle.ally+=Math.max(-4.4,Math.min(4.4,worldBattle.ballY-worldBattle.ally))*dt;
-      for(const player of ["right","rival"]){
-        const target=worldBattle.ballX>worldBattleCanvas.width*.55?worldBattle.ballY:h/2;
-        worldBattle[player]+=Math.max(-4.1,Math.min(4.1,target-worldBattle[player]))*dt;
-        worldBattle[player]=Math.max(27,Math.min(h-27,worldBattle[player]));
+      const h=worldBattleCanvas.height,w=worldBattleCanvas.width,slowDt=worldBattle.qteTimer>0?dt*.08:dt,paddleSpeed=5.2*slowDt;
+      if(keys.has("w"))worldBattle.left=Math.max(42,worldBattle.left-paddleSpeed);
+      if(keys.has("s"))worldBattle.left=Math.min(h-42,worldBattle.left+paddleSpeed);
+      worldBattle.leftTilt=keys.has("a")?Math.PI/4:keys.has("d")?-Math.PI/4:0;
+      const target=worldBattle.ball.x>w*.48?worldBattle.ball.y:h/2;
+      worldBattle.right+=Math.max(-4.2,Math.min(4.2,target-worldBattle.right))*slowDt;
+      worldBattle.right=Math.max(27,Math.min(h-27,worldBattle.right));
+      worldBattle.rightTilt=worldBattle.ball.y>worldBattle.right?Math.PI/8:-Math.PI/8;
+      for(const side of ["left","right"])if(worldBattle.boosts[side]>0)worldBattle.boosts[side]=Math.max(0,worldBattle.boosts[side]-slowDt/60);
+      for(const side of ["left","right"])if(worldBattle.powers[side]){worldBattle.powers[side].timer-=slowDt/60;if(worldBattle.powers[side].timer<=0)worldBattle.powers[side]=null}
+      for(const ball of allWorldBattleBalls())if(ball.powerTimer>0){
+        ball.powerTimer-=slowDt/60;
+        if(ball.powerTimer<=0){
+          const speed=Math.hypot(ball.vx,ball.vy);
+          if(ball.type==="fast"||ball.type==="slow"){const base=ball.baseSpeed||speed;ball.vx*=base/speed;ball.vy*=base/speed}
+          ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;
+        }
       }
-      if(worldBattle.pointPause>0)worldBattle.pointPause-=dt;
+      if(worldBattle.qteTimer>0){
+        worldBattle.qteTimer-=dt/60;if(worldBattle.qteTimer<=0)completeWorldQte(false);
+      }else if(worldBattle.pointPause>0)worldBattle.pointPause-=dt;
       else{
-        worldBattle.ballX+=worldBattle.vx*dt;worldBattle.ballY+=worldBattle.vy*dt;
-        if(worldBattle.ballY<7||worldBattle.ballY>h-7)worldBattle.vy*=-1;
-        if(worldBattle.vx<0&&worldBattle.ballX<=79&&Math.abs(worldBattle.ballY-worldBattle.ally)<32){
-          worldBattle.ballX=79;worldBattle.vx=Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.ally)*.025;
+        if(worldBattle.powerups&&!worldBattle.orb){
+          worldBattle.orbTimer-=dt/60;
+          if(worldBattle.orbTimer<=0){
+            const types=["fast","slow","paddle","double"];
+            worldBattle.orb={x:w/2,y:35+Math.random()*(h-70),type:types[Math.floor(Math.random()*types.length)]};
+          }
         }
-        if(worldBattle.vx<0&&worldBattle.ballX<=36&&Math.abs(worldBattle.ballY-worldBattle.left)<32){
-          worldBattle.ballX=36;worldBattle.vx=Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.left)*.025;
+        const balls=allWorldBattleBalls();
+        for(const ball of balls){
+          ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+          if(ball.y<7||ball.y>h-7){ball.y=Math.max(7,Math.min(h-7,ball.y));ball.vy*=-1}
+          if(ball.vx<0&&ball.x<=36&&Math.abs(ball.y-worldBattle.left)<(worldBattle.boosts.left>0?50:35)){
+            ball.x=36;hitWorldBattlePaddle(ball,"left");
+          }
+          if(ball.vx>0&&ball.x>=w-36&&Math.abs(ball.y-worldBattle.right)<(worldBattle.boosts.right>0?50:35)){
+            ball.x=w-36;hitWorldBattlePaddle(ball,"right");
+          }
+          if(worldBattle.orb&&Math.hypot(ball.x-worldBattle.orb.x,ball.y-worldBattle.orb.y)<=27){
+            const type=worldBattle.orb.type,collector=worldBattle.lastHit,recipient=type==="slow"?(collector==="left"?"right":"left"):collector;
+            worldBattle.orb=null;worldBattle.orbTimer=3+Math.random()*3;giveWorldBattlePower(recipient,type);
+          }
+          if(ball.x<0||ball.x>w){awardWorldBattlePoint(ball.x<0?"left":"right");break}
+          const speed=Math.hypot(ball.vx,ball.vy),limit=ball.type==="fast"||ball.type==="splitFast"?12:8.5;
+          if(speed>limit){ball.vx*=limit/speed;ball.vy*=limit/speed}
+          ball.vy=Math.max(-9,Math.min(9,ball.vy));
         }
-        if(worldBattle.vx>0&&worldBattle.ballX>=worldBattleCanvas.width-79&&Math.abs(worldBattle.ballY-worldBattle.rival)<32){
-          worldBattle.ballX=worldBattleCanvas.width-79;worldBattle.vx=-Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.rival)*.025;
+        if(worldBattle.boss&&worldBattle.bossStage===2&&worldBattle.ball.vx>0&&worldBattle.ball.x>=worldBattle.bossTarget){
+          worldBattle.ball.x=worldBattle.bossTarget;startWorldQte(2);
+        }else if(worldBattle.boss&&worldBattle.bossStage===3&&worldBattle.ball.vx>0&&worldBattle.ball.x>=worldBattle.bossTarget){
+          worldBattle.ball.x=worldBattle.bossTarget;startWorldQte(3);
         }
-        if(worldBattle.vx>0&&worldBattle.ballX>=worldBattleCanvas.width-36&&Math.abs(worldBattle.ballY-worldBattle.right)<32){
-          worldBattle.ballX=worldBattleCanvas.width-36;worldBattle.vx=-Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.right)*.025;
-        }
-        if(worldBattle.ballX<0||worldBattle.ballX>worldBattleCanvas.width)finishWorldBattlePoint();
       }
     }
     if(worldBattle.active)drawWorldBattle();
@@ -872,12 +1112,19 @@
   document.addEventListener("keydown",(event)=>{
     if(!$("#page-world").classList.contains("active")||event.target.matches("input,textarea,select"))return;
     const key=event.key.toLowerCase(),moves={w:[0,-1],arrowup:[0,-1],s:[0,1],arrowdown:[0,1],a:[-1,0],arrowleft:[-1,0],d:[1,0],arrowright:[1,0]};
-    if(worldBattle.active&&["arrowup","arrowdown"].includes(key)){event.preventDefault();keys.add(key);return}
-    if(worldBattle.active&&["w","s"].includes(key)){event.preventDefault();keys.add(key);return}
+    if(worldBattle.active&&worldBattle.qteTimer>0&&["w","a","s","d"].includes(key)){
+      event.preventDefault();
+      if(key===worldBattle.qteSequence[worldBattle.qteIndex])worldBattle.qteIndex++;
+      else worldBattle.qteIndex=key===worldBattle.qteSequence[0]?1:0;
+      $$("#world-battle-qte kbd").forEach((letter,index)=>letter.classList.toggle("current",index===worldBattle.qteIndex));
+      if(worldBattle.qteIndex===worldBattle.qteSequence.length)completeWorldQte(true);
+      return;
+    }
+    if(worldBattle.active&&["arrowup","arrowdown","w","s"].includes(key)){event.preventDefault();keys.add(key);return}
     if(worldBattle.active)return;
     if(moves[key]){event.preventDefault();moveWorld(...moves[key])}
     if(key==="e")interactWorld();
-    if(key===" ") {event.preventDefault();openWorldBattle(null)}
+    if(key===" ") {event.preventDefault();if(worldInterior?.dungeon)openWorldBattle(worldInterior.site,true);else openWorldBattle(null,false)}
   });
   drawWorld();
   updateWorldStats();
