@@ -50,9 +50,9 @@
   const lessons = [
     {title:"Movement & controls",short:"Find your feet",body:"Move your paddle with W and S. In a local match, the second player uses the up and down arrow keys. Small adjustments are usually better than chasing the ball."},
     {title:"The perfect return",short:"Meet the ball",body:"A return is more than a save. The point where the ball hits your paddle changes its angle: hit near the center for a steady shot, or near an edge to send it wide."},
-    {title:"Paddle tilt",short:"Shape the angle",body:"Your paddle subtly tilts as it moves. Meet the ball while moving to add spin and shape a sharper return. Keep your movement deliberate and make the angle work for you."},
+    {title:"Paddle tilt",short:"Shape the angle",body:"Moving your paddle tilts it by a full 45 degrees. Meet the ball while moving to add spin and shape a sharper return. The tilt is bold, so time your movement deliberately."},
     {title:"Powerups",short:"Change the rally",body:"Tap Space to trigger a power serve when the ability is ready. With powerups enabled, it temporarily widens your paddle—save it for a difficult return."},
-    {title:"Quick time events",short:"React on cue",body:"Watch for a QTE cue during high-pressure rallies. Hit the indicated key before the window closes to steady your return; the timing window tightens as rallies get longer."},
+    {title:"Quick time events",short:"React on cue",body:"Watch for a QTE cue during high-pressure rallies. Press the full random combination of W, A, S, and D keys in the order shown before time runs out to steady your return."},
     {title:"Read the rally",short:"Think ahead",body:"The ball reflects off the court walls. Track its angle and speed to predict where it will meet your paddle. Mix up your own return to keep the opponent guessing."}
   ];
   let activeLesson = 0;
@@ -151,15 +151,23 @@
 
   const canvas = $("#pong-canvas");
   const ctx = canvas.getContext("2d");
-  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,ballX:450,ballY:250,vx:5,vy:2.6,scoreLeft:0,scoreRight:0,paddleHeight:76,boost:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteKey:"e",rallies:0};
+  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,ballX:450,ballY:250,vx:5,vy:2.6,scoreLeft:0,scoreRight:0,paddleHeight:76,boost:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,rallies:0};
   const keys = new Set();
+  function randomQteSequence(){
+    const sequence=["w","a","s","d"];
+    for(let index=sequence.length-1;index>0;index--){
+      const swap=Math.floor(Math.random()*(index+1));
+      [sequence[index],sequence[swap]]=[sequence[swap],sequence[index]];
+    }
+    return sequence;
+  }
   function resetBall(direction = Math.random() < .5 ? -1 : 1) {
     game.ballX = canvas.width/2; game.ballY = canvas.height/2;
     game.vx = direction * (4.6 + Math.random()*1.1); game.vy = (Math.random()-.5)*5.2;
-    game.qteTimer=0;game.rallies=0;$("#qte-prompt").classList.remove("active");
+    game.qteTimer=0;game.qteSequence=[];game.qteIndex=0;game.rallies=0;$("#qte-prompt").classList.remove("active");
   }
   function resetMatch() {
-    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.boost=0; game.qteTimer=0; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();
+    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.boost=0; game.qteTimer=0;game.qteSequence=[];game.qteIndex=0; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();
     $("#score-left").textContent="0"; $("#score-right").textContent="0"; $("#game-overlay").classList.remove("hidden"); $("#start-game").textContent="START MATCH  ↗"; drawPong();
   }
   function drawPong() {
@@ -201,14 +209,14 @@
         const target=game.ballX<canvas.width*.55?game.ballY:canvas.height/2;
         game.left+=Math.max(-4.4,Math.min(4.4,target-game.left))*dt;
       }
-      game.tiltLeft=Math.max(-.12,Math.min(.12,(game.left-previousLeft)*.035));
-      game.tiltRight=Math.max(-.12,Math.min(.12,(game.right-previousRight)*.035));
+      game.tiltLeft=game.left===previousLeft?0:Math.sign(game.left-previousLeft)*Math.PI/4;
+      game.tiltRight=game.right===previousRight?0:Math.sign(game.right-previousRight)*Math.PI/4;
       if(game.boost>0){game.boost-=dt;game.paddleHeight=112}else game.paddleHeight=76;
       if(game.qteTimer>0){game.qteTimer-=dt;if(game.qteTimer<=0)$("#qte-prompt").classList.remove("active")}
       game.ballX+=game.vx*dt;game.ballY+=game.vy*dt;
       if(game.ballY<7||game.ballY>canvas.height-7)game.vy*=-1;
       const leftX=34,rightX=canvas.width-34;
-      if(game.vx<0&&game.ballX<=leftX&&Math.abs(game.ballY-game.left)<game.paddleHeight/2+8){game.ballX=leftX;game.vx=Math.abs(game.vx)*1.045;game.vy+=(game.ballY-game.left)*.055+(keys.has("s")?-.28:keys.has("w")?.28:0);game.rallies++;if(game.mode!=="arena"&&game.qteTimer<=0&&game.rallies>=3&&Math.random()<.2){game.qteKey=Math.random()<.5?"e":"q";game.qteTimer=82;$("#qte-key").textContent=game.qteKey.toUpperCase();$("#qte-prompt").classList.add("active")}}
+      if(game.vx<0&&game.ballX<=leftX&&Math.abs(game.ballY-game.left)<game.paddleHeight/2+8){game.ballX=leftX;game.vx=Math.abs(game.vx)*1.045;game.vy+=(game.ballY-game.left)*.055+(keys.has("s")?-.28:keys.has("w")?.28:0);game.rallies++;if(game.mode!=="arena"&&game.qteTimer<=0&&game.rallies>=3&&Math.random()<.2){game.qteSequence=randomQteSequence();game.qteIndex=0;game.qteTimer=180;$("#qte-key").innerHTML=game.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("");$("#qte-prompt").classList.add("active")}}
       if(game.vx>0&&game.ballX>=rightX&&Math.abs(game.ballY-game.right)<38+8){game.ballX=rightX;game.vx=-Math.abs(game.vx)*1.035;game.vy+=(game.ballY-game.right)*.045;game.rallies++}
       if(game.ballX<0||game.ballX>canvas.width)finishPoint();
       game.vx=Math.max(-9,Math.min(9,game.vx));game.vy=Math.max(-7,Math.min(7,game.vy));
@@ -237,10 +245,12 @@
     if(["arrowup","arrowdown"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
     keys.add(key);
     if(key===" "&&$("#page-onevone").classList.contains("active")&&game.running&&game.powerups)game.boost=230;
-    if(key===game.qteKey&&game.qteTimer>0&&$("#page-onevone").classList.contains("active")){
-      game.qteTimer=0;game.boost=Math.max(game.boost,150);$("#qte-prompt").classList.remove("active");toast("Perfect timing — paddle boost!");
+    if(game.qteTimer>0&&$("#page-onevone").classList.contains("active")&&["w","a","s","d"].includes(key)){
+      if(key===game.qteSequence[game.qteIndex])game.qteIndex++;
+      else game.qteIndex=key===game.qteSequence[0]?1:0;
+      $$("#qte-key kbd").forEach((letter,index)=>letter.classList.toggle("current",index===game.qteIndex));
+      if(game.qteIndex===game.qteSequence.length){game.qteTimer=0;game.boost=Math.max(game.boost,150);$("#qte-prompt").classList.remove("active");toast("Perfect combo — paddle boost!")}
     }
-    if(key==="e"&&$("#page-world").classList.contains("active"))interactWorld();
   });
   document.addEventListener("keyup",(event)=>keys.delete(event.key.toLowerCase()));
 
@@ -258,6 +268,59 @@
     {id:"comeback",name:"Never give up",detail:"Focus on resilience when behind.",price:35}
   ];
   let evolution=null;
+  const evoCanvas=$("#evo-canvas"),evoCtx=evoCanvas.getContext("2d");
+  const evoSim={ballX:300,ballY:115,vx:4.7,vy:2.4,left:115,right:115,scoreLeft:0,scoreRight:0,pause:0,last:0,matchPause:0};
+  function drawEvolution(){
+    const c=evoCtx,w=evoCanvas.width,h=evoCanvas.height;
+    c.clearRect(0,0,w,h);c.fillStyle="#0b1118";c.fillRect(0,0,w,h);
+    c.strokeStyle="#34404e";c.setLineDash([5,8]);c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.stroke();c.setLineDash([]);
+    c.fillStyle="#a4f6b1";c.shadowColor="#a4f6b1";c.shadowBlur=10;c.fillRect(22,evoSim.left-23,7,46);
+    c.fillStyle="#9aa7b8";c.shadowColor="#a4aebc";c.fillRect(w-29,evoSim.right-23,7,46);
+    c.fillStyle="#e8fff3";c.shadowColor="#a4f6b1";c.beginPath();c.arc(evoSim.ballX,evoSim.ballY,5,0,Math.PI*2);c.fill();c.shadowBlur=0;
+    c.fillStyle="#718091";c.font="10px monospace";c.textAlign="center";c.fillText(`${evoSim.scoreLeft}  :  ${evoSim.scoreRight}`,w/2,17);
+    if(!evolution){c.fillStyle="#a4f6b1";c.font="11px monospace";c.fillText("START A CAREER TO WATCH YOUR AI PLAY",w/2,h-15)}
+  }
+  function resetEvolutionBall(direction=Math.random()<.5?-1:1){
+    evoSim.ballX=evoCanvas.width/2;evoSim.ballY=evoCanvas.height/2;
+    evoSim.vx=direction*(4+Math.random()*1.1);evoSim.vy=(Math.random()-.5)*5;
+    evoSim.pause=26;
+  }
+  function finishEvolutionPoint(){
+    if(evoSim.ballX<0)evoSim.scoreRight++;else evoSim.scoreLeft++;
+    if(evoSim.scoreLeft>=5||evoSim.scoreRight>=5){
+      const won=evoSim.scoreLeft>evoSim.scoreRight,reward=12+(evolution.upgrades.learning||0)*3;
+      if(won){evolution.wins++;evolution.cash+=reward;evolution.xp+=24+(evolution.upgrades.learning||0)*4}
+      else{evolution.losses++;evolution.cash+=Math.floor(reward/2);evolution.xp+=12+(evolution.upgrades.learning||0)*2}
+      evoSim.matchPause=90;renderEvolution();return;
+    }
+    resetEvolutionBall(evoSim.ballX<0?1:-1);
+  }
+  function evolutionFrame(time){
+    const dt=Math.min((time-evoSim.last)/16.67||1,2.4);evoSim.last=time;
+    if(evolution&&$("#page-evolution").classList.contains("active")){
+      const w=evoCanvas.width,h=evoCanvas.height,upgrade=evolution.upgrades;
+      if(evoSim.matchPause>0){
+        evoSim.matchPause-=dt;
+        if(evoSim.matchPause<=0){evoSim.scoreLeft=0;evoSim.scoreRight=0;resetEvolutionBall()}
+      }else if(evoSim.pause>0)evoSim.pause-=dt;
+      else{
+        const leftTarget=evoSim.ballX< w*.52?evoSim.ballY:h/2;
+        const rivalTarget=evoSim.ballX>w*.48?evoSim.ballY:h/2;
+        const leftSpeed=2.2+(upgrade.reaction||0)*.22+(upgrade.range||0)*.12;
+        evoSim.left+=Math.max(-leftSpeed,Math.min(leftSpeed,leftTarget-evoSim.left))*dt;
+        evoSim.right+=Math.max(-3.8,Math.min(3.8,rivalTarget-evoSim.right))*dt;
+        evoSim.left=Math.max(24,Math.min(h-24,evoSim.left));evoSim.right=Math.max(24,Math.min(h-24,evoSim.right));
+        evoSim.ballX+=evoSim.vx*dt;evoSim.ballY+=evoSim.vy*dt;
+        if(evoSim.ballY<5||evoSim.ballY>h-5)evoSim.vy*=-1;
+        if(evoSim.vx<0&&evoSim.ballX<=38&&Math.abs(evoSim.ballY-evoSim.left)<27+(upgrade.range||0)*1.3){evoSim.ballX=39;evoSim.vx=Math.abs(evoSim.vx)*1.025;evoSim.vy+=(evoSim.ballY-evoSim.left)*.045}
+        if(evoSim.vx>0&&evoSim.ballX>=w-38&&Math.abs(evoSim.ballY-evoSim.right)<27){evoSim.ballX=w-39;evoSim.vx=-Math.abs(evoSim.vx)*1.025;evoSim.vy+=(evoSim.ballY-evoSim.right)*.04}
+        if(evoSim.ballX<0||evoSim.ballX>w)finishEvolutionPoint();
+      }
+      drawEvolution();
+    }
+    requestAnimationFrame(evolutionFrame);
+  }
+  requestAnimationFrame(evolutionFrame);
   function validEvolution(data){
     return data&&data.format==="pong-evolution-save"&&data.version===1&&typeof data.player==="string"&&Number.isFinite(data.cash)&&data.cash>=0&&Number.isFinite(data.xp)&&data.xp>=0&&Number.isFinite(data.wins)&&Number.isFinite(data.losses)&&data.upgrades&&typeof data.upgrades==="object"&&["reaction","range","learning"].every((key)=>Number.isInteger(data.upgrades[key])&&data.upgrades[key]>=0)&&Array.isArray(data.incentives)&&data.incentives.every((id)=>incentiveDefinitions.some((item)=>item.id===id));
   }
@@ -322,54 +385,292 @@
     const saved=localStorage.getItem(EVOLUTION_KEY);
     if(saved){const parsed=JSON.parse(saved);if(validEvolution(parsed)){evolution=parsed;renderEvolution();}else localStorage.removeItem(EVOLUTION_KEY);}
   }catch(error){console.error("Could not load Pong Evolution save.",error);}
-  window.setInterval(()=>{
-    if(!evolution)return;
-    const level=1+Math.floor(evolution.xp/100),reward=2+(evolution.upgrades.learning||0);
-    const incentiveBoost=evolution.incentives.reduce((boost,id)=>boost+(["angles","patience","comeback"].includes(id)?0.012:0),0);
-    const winChance=Math.min(.76,.25+level*.018+(evolution.upgrades.reaction||0)*.025+(evolution.upgrades.range||0)*.02+incentiveBoost);
-    if(Math.random()<winChance){evolution.wins++;evolution.cash+=reward;evolution.xp+=4+(evolution.upgrades.learning||0)*2}
-    else{evolution.losses++;evolution.cash+=Math.max(1,reward-1);evolution.xp+=2+(evolution.upgrades.learning||0)}
-    renderEvolution();
-  },4200);
+  drawEvolution();
 
-  const world=(()=>{let state={x:8,y:6,tokens:0};try{const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");if(saved&&saved.format==="pong-world-save"&&saved.version===1)state={...state,...saved}}catch(error){console.error("Could not load Pong World save.",error)}
-    return state;
+  const world=(()=>{
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],inventory:[],activeJob:null,tutorialDone:false};
+    try{
+      const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
+      if(saved&&saved.format==="pong-world-save"&&saved.version===1)return{...defaults,...saved,
+        recruits:Array.isArray(saved.recruits)?saved.recruits:[],openedLoot:Array.isArray(saved.openedLoot)?saved.openedLoot:[],
+        inspected:Array.isArray(saved.inspected)?saved.inspected:[],talkedTo:Array.isArray(saved.talkedTo)?saved.talkedTo:[],
+        completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
+    }catch(error){console.error("Could not load Pong World save.",error)}
+    return defaults;
   })();
   const worldCanvas=$("#world-canvas"),worldCtx=worldCanvas.getContext("2d");
-  const tile=40,worldRows=12,worldCols=20,arcade={x:15,y:4},npc={x:5,y:8};
-  function saveWorld(){localStorage.setItem(WORLD_KEY,JSON.stringify({format:"pong-world-save",version:1,x:world.x,y:world.y,tokens:world.tokens}))}
+  const worldBattleCanvas=$("#world-battle-canvas"),worldBattleCtx=worldBattleCanvas.getContext("2d");
+  const tile=40,regionSize=24,biomes=["MOSS FIELDS","EMBER RIDGE","GLASS DESERT","FROSTLINE","NEON MARSH"];
+  const worldNames={
+    structure:["Signal Tower","Wayfarer Shrine","Old Relay","Rally Depot","Skybridge"],
+    job:["Courier Board","Sparring Yard","Salvage Crew","Rally Workshop"],
+    cache:["Supply Cache","Buried Locker","Lost Crate","Glowing Stash"],
+    npc:["Rally Scout","Paddle Mechanic","Wandering Ace","Court Drifter","Rookie Bot"],
+    duel:["Open Court","Doubles Arena","Rival Camp","Street Court"]
+  };
+  const worldColors={structure:"#93baff",job:"#ffcf77",cache:"#a4f6b1",npc:"#c5adff",duel:"#ff9b72"};
+  const worldTypes=["structure","job","cache","npc","duel"];
+  function worldHash(x,y,salt=0){
+    let value=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(world.seed|0,1442695041)+salt;
+    value=Math.imul(value^(value>>>13),1274126177);
+    return(value^(value>>>16))>>>0;
+  }
+  function regionRandom(rx,ry){
+    let seed=worldHash(rx,ry,2654435761);
+    return()=>{seed=(seed+0x6d2b79f5)|0;let value=seed;value=Math.imul(value^(value>>>15),value|1);value^=value+Math.imul(value^(value>>>7),value|61);return((value^(value>>>14))>>>0)/4294967296};
+  }
+  function worldSitesNear(x,y){
+    const sites=[];
+    for(let ry=Math.floor((y-12)/regionSize);ry<=Math.floor((y+12)/regionSize);ry++){
+      for(let rx=Math.floor((x-12)/regionSize);rx<=Math.floor((x+12)/regionSize);rx++){
+        const random=regionRandom(rx,ry),used=new Set();
+        const count=5+Math.floor(random()*3);
+        for(let index=0;index<count;index++){
+          let localX,localY,key;
+          do{localX=2+Math.floor(random()*(regionSize-4));localY=2+Math.floor(random()*(regionSize-4));key=`${localX},${localY}`}while(used.has(key));
+          used.add(key);
+          const type=worldTypes[Math.floor(random()*worldTypes.length)];
+          const names=worldNames[type],siteX=rx*regionSize+localX,siteY=ry*regionSize+localY;
+          sites.push({id:`${world.seed}:${rx}:${ry}:${index}`,x:siteX,y:siteY,type,name:names[Math.floor(random()*names.length)],recruitable:type==="npc"&&random()<.58,jobKind:["courier","scavenger","sparring"][Math.floor(random()*3)]});
+        }
+      }
+    }
+    return sites;
+  }
+  function nearestWorldSite(){
+    return worldSitesNear(world.x,world.y).map((site)=>({...site,distance:Math.abs(site.x-world.x)+Math.abs(site.y-world.y)}))
+      .filter((site)=>site.distance<=1).sort((a,b)=>a.distance-b.distance)[0]||null;
+  }
+  function saveWorld(){
+    localStorage.setItem(WORLD_KEY,JSON.stringify(world));
+  }
+  function updateWorldStats(){
+    $("#world-tokens").textContent=world.tokens;
+    $("#world-recruits").textContent=world.recruits.length;
+    $("#world-wins").textContent=world.wins;
+    $("#world-loot-count").textContent=world.loot;
+    $("#world-coordinates").textContent=`X: ${world.x} · Y: ${world.y}`;
+    const sectorX=Math.floor(world.x/regionSize),sectorY=Math.floor(world.y/regionSize);
+    $("#world-location").textContent=`${biomes[worldHash(sectorX,sectorY)%biomes.length]} · SECTOR ${sectorX}, ${sectorY}`;
+    const job=world.activeJob;
+    $("#world-job-status").textContent=job?`${job.name}: ${job.progress}/${job.goal} ${job.kind==="courier"?"steps":job.kind==="scavenger"?"caches":"duels won"} · REWARD ◈ ${job.reward}`:"No active contract. Find a job site or ask a local.";
+  }
+  function drawSite(c,site,screenX,screenY){
+    const color=worldColors[site.type],x=screenX,y=screenY;
+    c.save();c.shadowColor=color;c.shadowBlur=9;c.fillStyle=color;c.strokeStyle=color;
+    if(site.type==="structure"){
+      c.fillRect(x+8,y+12,24,22);c.fillRect(x+13,y+7,14,7);c.fillStyle="#18232c";c.fillRect(x+17,y+20,7,14);
+    }else if(site.type==="job"){
+      c.fillRect(x+10,y+12,20,20);c.fillStyle="#1a2024";c.fillRect(x+14,y+16,12,12);c.strokeRect(x+8,y+9,24,25);
+    }else if(site.type==="cache"){
+      c.fillRect(x+10,y+17,20,15);c.fillRect(x+8,y+14,24,5);c.fillStyle="#16251d";c.fillRect(x+18,y+19,4,8);
+    }else if(site.type==="npc"){
+      c.beginPath();c.arc(x+20,y+13,6,0,Math.PI*2);c.fill();c.fillRect(x+14,y+20,12,13);
+    }else{
+      c.strokeRect(x+5,y+5,30,30);c.strokeRect(x+10,y+10,20,20);c.fillRect(x+17,y+17,6,6);
+    }
+    c.shadowBlur=0;c.fillStyle="#e7edf4";c.font="8px monospace";c.textAlign="center";c.fillText(site.name.toUpperCase(),x+20,y+39);c.restore();
+  }
   function drawWorld(){
     const c=worldCtx;if(!c)return;
+    const halfCols=Math.ceil(worldCanvas.width/tile/2)+1,halfRows=Math.ceil(worldCanvas.height/tile/2)+1;
     c.clearRect(0,0,worldCanvas.width,worldCanvas.height);
-    for(let y=0;y<worldRows;y++)for(let x=0;x<worldCols;x++){
-      const isPath=(y>=5&&y<=7)||(x>=9&&x<=11);
-      c.fillStyle=isPath?((x+y)%2?"#1b3034":"#1d3437"):((x+y)%2?"#15282a":"#172b2c");
-      c.fillRect(x*tile,y*tile,tile,tile);
-      c.strokeStyle="#23393a";c.strokeRect(x*tile,y*tile,tile,tile);
-      if(!isPath&&(x*7+y*13)%11===0){c.fillStyle="#355448";c.beginPath();c.arc(x*tile+20,y*tile+20,7,0,Math.PI*2);c.fill();c.fillStyle="#6b976a";c.fillRect(x*tile+18,y*tile+10,4,8)}
+    for(let dy=-halfRows;dy<=halfRows;dy++)for(let dx=-halfCols;dx<=halfCols;dx++){
+      const wx=world.x+dx,wy=world.y+dy,hash=worldHash(wx,wy),sx=worldCanvas.width/2-tile/2+dx*tile,sy=worldCanvas.height/2-tile/2+dy*tile;
+      const biome=biomes[worldHash(Math.floor(wx/regionSize),Math.floor(wy/regionSize))%biomes.length];
+      const colors=biome==="EMBER RIDGE"?["#342823","#3a2a23"]:biome==="GLASS DESERT"?["#35332a","#3c382b"]:biome==="FROSTLINE"?["#26333a","#2b3940"]:biome==="NEON MARSH"?["#20342f","#253a33"]:["#1b302c","#20352f"];
+      c.fillStyle=colors[hash%2];c.fillRect(sx,sy,tile,tile);
+      if(hash%13===0){c.fillStyle=biome==="FROSTLINE"?"#647985":"#47614d";c.beginPath();c.arc(sx+20,sy+20,4+(hash%5),0,Math.PI*2);c.fill()}
+      if(hash%17===0){c.strokeStyle="#ffffff12";c.strokeRect(sx+5,sy+5,30,30)}
     }
-    c.fillStyle="#304648";c.fillRect(arcade.x*tile+4,arcade.y*tile+4,32,32);c.fillStyle="#15211e";c.fillRect(arcade.x*tile+8,arcade.y*tile+8,24,24);c.shadowColor="#a4f6b1";c.shadowBlur=14;c.fillStyle="#a4f6b1";c.fillRect(arcade.x*tile+14,arcade.y*tile+13,12,10);c.shadowBlur=0;c.fillStyle="#c9d5bd";c.fillRect(arcade.x*tile+14,arcade.y*tile+26,12,3);
-    c.fillStyle="#b8a1ff";c.beginPath();c.arc(npc.x*tile+20,npc.y*tile+18,7,0,Math.PI*2);c.fill();c.fillStyle="#d5caff";c.fillRect(npc.x*tile+14,npc.y*tile+24,12,10);
-    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=13;c.beginPath();c.arc(world.x*tile+20,world.y*tile+18,8,0,Math.PI*2);c.fill();c.shadowBlur=0;c.fillStyle="#e7fffb";c.fillRect(world.x*tile+17,world.y*tile+25,6,9);
-    $("#world-coordinates").textContent=`X: ${String(world.x).padStart(2,"0")} · Y: ${String(world.y).padStart(2,"0")}`;$("#world-tokens").textContent=world.tokens;
+    const sites=worldSitesNear(world.x,world.y);
+    for(const site of sites){
+      const sx=worldCanvas.width/2-tile/2+(site.x-world.x)*tile,sy=worldCanvas.height/2-tile/2+(site.y-world.y)*tile;
+      if(sx+tile>=0&&sx<worldCanvas.width&&sy+tile>=0&&sy<worldCanvas.height)drawSite(c,site,sx,sy);
+    }
+    const playerX=worldCanvas.width/2,playerY=worldCanvas.height/2;
+    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=15;c.beginPath();c.arc(playerX,playerY-5,8,0,Math.PI*2);c.fill();
+    c.fillRect(playerX-7,playerY+3,14,14);c.shadowBlur=0;c.fillStyle="#10211f";c.fillRect(playerX-3,playerY-7,2,2);c.fillRect(playerX+2,playerY-7,2,2);
+    const nearby=nearestWorldSite();
+    $("#world-message").textContent=nearby?`${nearby.name} nearby — press E to ${nearby.type==="duel"?"challenge the crew":nearby.type==="cache"?"open it":"interact"}.`:`New ground, new possibilities. Keep exploring.`;
+    updateWorldStats();
   }
-  function moveWorld(dx,dy){
-    const nextX=Math.max(0,Math.min(worldCols-1,world.x+dx)),nextY=Math.max(0,Math.min(worldRows-1,world.y+dy));
-    if(nextX===world.x&&nextY===world.y)return;
-    world.x=nextX;world.y=nextY;saveWorld();drawWorld();
-    $("#world-message").textContent=Math.abs(world.x-arcade.x)+Math.abs(world.y-arcade.y)<=1?"Press E to play at the arcade.":"Find the glowing arcade to earn a token.";
+  function finishWorldJob(){
+    const job=world.activeJob;if(!job||job.progress<job.goal)return;
+    world.tokens+=job.reward;world.xp+=job.reward*2;world.completedJobs.push(job.id);world.activeJob=null;
+    $("#world-message").textContent=`Contract complete! You earned ${job.reward} tokens.`;
+    toast(`Contract complete · +${job.reward} tokens`);
+    saveWorld();updateWorldStats();
+  }
+  function advanceWorldJob(kind){
+    const job=world.activeJob;if(!job||job.kind!==kind)return;
+    job.progress++;finishWorldJob();saveWorld();
+  }
+  function offerWorldJob(site,kind=site.jobKind){
+    if(world.completedJobs.includes(site.id)){ $("#world-message").textContent=`${site.name} has no more work right now. Explore another sector for new jobs.`;return}
+    if(world.activeJob){$("#world-message").textContent=`Finish your ${world.activeJob.name} contract first.`;return}
+    const definitions={
+      courier:{name:"Long-haul courier",goal:8,reward:14},
+      scavenger:{name:"Salvage collection",goal:2,reward:18},
+      sparring:{name:"Doubles sparring",goal:1,reward:22}
+    };
+    const details=definitions[kind],job={id:site.id,kind,name:details.name,goal:details.goal,progress:0,reward:details.reward};
+    world.activeJob=job;$("#world-message").textContent=`Contract accepted: ${job.name}. ${kind==="courier"?"Travel 8 tiles.":kind==="scavenger"?"Open 2 supply caches.":"Win a 2v2 duel."}`;
+    saveWorld();updateWorldStats();
   }
   function interactWorld(){
-    if(Math.abs(world.x-arcade.x)+Math.abs(world.y-arcade.y)<=1){
-      world.tokens++;saveWorld();$("#world-tokens").textContent=world.tokens;$("#world-message").textContent="You found a Pong token! The arcade is yours.";toast("Pong token collected.");return;
+    const site=nearestWorldSite();
+    if(!site){$("#world-message").textContent="Nothing close enough to interact with. Explore in any direction.";return}
+    if(site.type==="duel"){openWorldBattle(site);return}
+    if(site.type==="job"){offerWorldJob(site);return}
+    if(site.type==="cache"){
+      if(world.openedLoot.includes(site.id)){$("#world-message").textContent="This cache has already been looted. There are more out there.";return}
+      const roll=worldHash(site.x,site.y,991),tokens=5+(roll%15),loot=["Paddle Patch","Neon Grip","Lucky Ball","Spare Bearings"][roll%4];
+      world.openedLoot.push(site.id);world.tokens+=tokens;world.loot++;world.inventory.push(loot);advanceWorldJob("scavenger");
+      $("#world-message").textContent=`Cache opened: ${loot} and ${tokens} tokens.`;
+      toast(`Loot found · ${loot} · +${tokens} tokens`);saveWorld();updateWorldStats();drawWorld();return;
     }
-    if(Math.abs(world.x-npc.x)+Math.abs(world.y-npc.y)<=1){$("#world-message").textContent="“Best rally wins. Fancy a match?” — local player";return}
-    $("#world-message").textContent="Nothing nearby. Explore the paths and look for the glowing arcade.";
+    if(site.type==="npc"){
+      if(world.recruits.includes(site.id)){$("#world-message").textContent=`${site.name} is already in your crew and ready to play.`;return}
+      if(site.recruitable&&world.recruits.length<4){
+        world.recruits.push(site.id);world.talkedTo.push(site.id);$("#world-message").textContent=`${site.name} joined your crew. They'll take the second paddle in your next 2v2 duel.`;
+        toast(`${site.name} joined your AI crew!`);
+      }else if(!world.talkedTo.includes(site.id)){
+        world.talkedTo.push(site.id);offerWorldJob(site,"courier");
+        $("#world-message").textContent=`${site.name}: "Could you run a quick delivery? Travel 8 tiles and I'll pay you."`;
+      }else $("#world-message").textContent=`${site.name}: "The courts are always open. Keep moving and you'll find one."`;
+      saveWorld();updateWorldStats();return;
+    }
+    if(!world.inspected.includes(site.id)){
+      world.inspected.push(site.id);const reward=3+(worldHash(site.x,site.y,37)%8);world.tokens+=reward;world.xp+=reward;
+      $("#world-message").textContent=`You explored ${site.name} and found ${reward} tokens tucked away.`;
+      toast(`${site.name} explored · +${reward} tokens`);
+    }else $("#world-message").textContent=`You've already explored ${site.name}. There's more world beyond it.`;
+    saveWorld();updateWorldStats();
   }
+  function moveWorld(dx,dy){
+    world.x+=dx;world.y+=dy;
+    if(world.activeJob?.kind==="courier"){world.activeJob.progress++;finishWorldJob()}
+    saveWorld();drawWorld();
+  }
+  const tutorialSteps=[
+    "Move with W, A, S, D or the arrow keys. The camera follows you, and new territory keeps appearing in every direction.",
+    "Walk next to a person, structure, job board, supply cache, or court and press E to interact. The nearby landmark is named above the map.",
+    "Job boards offer courier, salvage, and sparring contracts. Complete the task to earn tokens; caches have randomized loot.",
+    "Talk to the locals. Some wandering players can join your crew and play as your AI teammate in a doubles match.",
+    "Find a doubles arena or press START A 2V2 DUEL. You control one paddle with W/S; your teammate and two rivals finish the court."
+  ];
+  let tutorialStep=0;
+  function renderWorldTutorial(){
+    $("#world-tutorial-copy").textContent=tutorialSteps[tutorialStep];
+    $("#world-tutorial-step").textContent=`STEP ${tutorialStep+1} / ${tutorialSteps.length}`;
+    $("#world-tutorial-next").textContent=tutorialStep===tutorialSteps.length-1?"FINISH ✓":"NEXT  →";
+  }
+  $("#world-tutorial-start").addEventListener("click",()=>{
+    tutorialStep=0;renderWorldTutorial();$("#world-tutorial-controls").classList.remove("hidden");$("#world-tutorial-start").textContent="RESTART";
+  });
+  $("#world-tutorial-next").addEventListener("click",()=>{
+    if(tutorialStep<tutorialSteps.length-1){tutorialStep++;renderWorldTutorial();return}
+    world.tutorialDone=true;saveWorld();$("#world-tutorial-controls").classList.add("hidden");$("#world-tutorial-start").textContent="REPLAY";toast("Pong World tutorial complete.");
+  });
+  $("#world-tutorial-close").addEventListener("click",()=>$("#world-tutorial-controls").classList.add("hidden"));
+  $("#world-interact").addEventListener("click",interactWorld);
+  $("#world-battle").addEventListener("click",()=>openWorldBattle(null));
+
+  const worldBattle={running:false,active:false,left:90,ally:270,right:90,rival:270,ballX:400,ballY:180,vx:5,vy:2.5,scoreLeft:0,scoreRight:0,last:0,pointPause:0,allyAI:false};
+  function drawWorldBattle(){
+    const c=worldBattleCtx;if(!c)return;
+    const w=worldBattleCanvas.width,h=worldBattleCanvas.height;
+    c.clearRect(0,0,w,h);c.fillStyle="#0b1119";c.fillRect(0,0,w,h);
+    c.strokeStyle="#293544";c.setLineDash([6,9]);c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.stroke();c.setLineDash([]);
+    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.fillRect(25,worldBattle.left-26,8,52);c.fillRect(64,worldBattle.ally-26,8,52);
+    c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.fillRect(w-33,worldBattle.right-26,8,52);c.fillRect(w-72,worldBattle.rival-26,8,52);
+    c.fillStyle="#edfff9";c.shadowColor="#7df2e3";c.beginPath();c.arc(worldBattle.ballX,worldBattle.ballY,7,0,Math.PI*2);c.fill();c.shadowBlur=0;
+  }
+  function resetWorldBall(direction=Math.random()<.5?-1:1){
+    worldBattle.ballX=worldBattleCanvas.width/2;worldBattle.ballY=worldBattleCanvas.height/2;
+    worldBattle.vx=direction*(4.4+Math.random()*1.2);worldBattle.vy=(Math.random()-.5)*5;
+    worldBattle.pointPause=35;
+  }
+  function openWorldBattle(site){
+    worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=90;worldBattle.ally=270;worldBattle.right=90;worldBattle.rival=270;
+    worldBattle.allyAI=world.recruits.length>0;
+    $("#world-battle-title").textContent=site?`${site.name.toUpperCase()} · 2V2`:"OPEN CHALLENGE · 2V2";
+    $("#world-battle-message").textContent=worldBattle.allyAI?"Your recruited AI teammate has the second paddle. Use W/S to play.":"Use W/S and ↑/↓ to control both teammates. First team to 5 wins.";
+    $("#world-battle-start").textContent="START DUEL  ↗";$("#world-battle-start").disabled=false;
+    $("#world-battle-overlay").classList.remove("hidden");
+    $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";resetWorldBall();drawWorldBattle();
+  }
+  function finishWorldBattlePoint(){
+    if(worldBattle.ballX<0)worldBattle.scoreRight++;else worldBattle.scoreLeft++;
+    $("#world-score-left").textContent=worldBattle.scoreLeft;$("#world-score-right").textContent=worldBattle.scoreRight;
+    if(worldBattle.scoreLeft>=5||worldBattle.scoreRight>=5){
+      worldBattle.running=false;const won=worldBattle.scoreLeft>worldBattle.scoreRight;
+      if(won){world.wins++;world.tokens+=12;world.xp+=30;$("#world-battle-message").textContent="VICTORY! +12 tokens · your crew gets stronger.";
+        toast("2v2 duel won · +12 tokens");advanceWorldJob("sparring")}
+      else $("#world-battle-message").textContent="RIVAL CREW WINS. Regroup and challenge another court.";
+      $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;saveWorld();updateWorldStats();return;
+    }
+    resetWorldBall(worldBattle.ballX<0?1:-1);
+  }
+  $("#world-battle-start").addEventListener("click",()=>{
+    worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=90;worldBattle.ally=270;worldBattle.right=90;worldBattle.rival=270;worldBattle.running=true;
+    $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";$("#world-battle-start").disabled=true;
+    $("#world-battle-message").textContent=worldBattle.allyAI?"YOU + AI TEAMMATE VS RIVAL DUO":"YOU + TEAMMATE VS RIVAL DUO";
+    resetWorldBall();drawWorldBattle();
+  });
+  $("#world-battle-close").addEventListener("click",()=>{
+    worldBattle.running=false;worldBattle.active=false;$("#world-battle-overlay").classList.add("hidden");
+  });
+  function worldBattleFrame(time){
+    const dt=Math.min((time-worldBattle.last)/16.67||1,2.4);worldBattle.last=time;
+    if(worldBattle.running&&$("#page-world").classList.contains("active")){
+      const speed=5.2*dt,h=worldBattleCanvas.height;
+      if(keys.has("w"))worldBattle.left=Math.max(27,worldBattle.left-speed);
+      if(keys.has("s"))worldBattle.left=Math.min(h-27,worldBattle.left+speed);
+      if(!worldBattle.allyAI){
+        if(keys.has("arrowup"))worldBattle.ally=Math.max(27,worldBattle.ally-speed);
+        if(keys.has("arrowdown"))worldBattle.ally=Math.min(h-27,worldBattle.ally+speed);
+      }else worldBattle.ally+=Math.max(-4.4,Math.min(4.4,worldBattle.ballY-worldBattle.ally))*dt;
+      for(const player of ["right","rival"]){
+        const target=worldBattle.ballX>worldBattleCanvas.width*.55?worldBattle.ballY:h/2;
+        worldBattle[player]+=Math.max(-4.1,Math.min(4.1,target-worldBattle[player]))*dt;
+        worldBattle[player]=Math.max(27,Math.min(h-27,worldBattle[player]));
+      }
+      if(worldBattle.pointPause>0)worldBattle.pointPause-=dt;
+      else{
+        worldBattle.ballX+=worldBattle.vx*dt;worldBattle.ballY+=worldBattle.vy*dt;
+        if(worldBattle.ballY<7||worldBattle.ballY>h-7)worldBattle.vy*=-1;
+        if(worldBattle.vx<0&&worldBattle.ballX<=79&&Math.abs(worldBattle.ballY-worldBattle.ally)<32){
+          worldBattle.ballX=79;worldBattle.vx=Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.ally)*.025;
+        }
+        if(worldBattle.vx<0&&worldBattle.ballX<=36&&Math.abs(worldBattle.ballY-worldBattle.left)<32){
+          worldBattle.ballX=36;worldBattle.vx=Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.left)*.025;
+        }
+        if(worldBattle.vx>0&&worldBattle.ballX>=worldBattleCanvas.width-79&&Math.abs(worldBattle.ballY-worldBattle.rival)<32){
+          worldBattle.ballX=worldBattleCanvas.width-79;worldBattle.vx=-Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.rival)*.025;
+        }
+        if(worldBattle.vx>0&&worldBattle.ballX>=worldBattleCanvas.width-36&&Math.abs(worldBattle.ballY-worldBattle.right)<32){
+          worldBattle.ballX=worldBattleCanvas.width-36;worldBattle.vx=-Math.abs(worldBattle.vx)*1.04;worldBattle.vy+=(worldBattle.ballY-worldBattle.right)*.025;
+        }
+        if(worldBattle.ballX<0||worldBattle.ballX>worldBattleCanvas.width)finishWorldBattlePoint();
+      }
+    }
+    if(worldBattle.active)drawWorldBattle();
+    requestAnimationFrame(worldBattleFrame);
+  }
+  requestAnimationFrame(worldBattleFrame);
   document.addEventListener("keydown",(event)=>{
     if(!$("#page-world").classList.contains("active")||event.target.matches("input,textarea,select"))return;
     const key=event.key.toLowerCase(),moves={w:[0,-1],arrowup:[0,-1],s:[0,1],arrowdown:[0,1],a:[-1,0],arrowleft:[-1,0],d:[1,0],arrowright:[1,0]};
+    if(worldBattle.active&&["arrowup","arrowdown"].includes(key)){event.preventDefault();keys.add(key);return}
+    if(worldBattle.active&&["w","s"].includes(key)){event.preventDefault();keys.add(key);return}
+    if(worldBattle.active)return;
     if(moves[key]){event.preventDefault();moveWorld(...moves[key])}
+    if(key==="e")interactWorld();
+    if(key===" ") {event.preventDefault();openWorldBattle(null)}
   });
   drawWorld();
+  updateWorldStats();
+  if(!world.tutorialDone)$("#world-tutorial-start").click();
 })();
