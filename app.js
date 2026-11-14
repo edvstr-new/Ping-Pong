@@ -37,6 +37,10 @@
     if (!pages.includes(name)) return;
     $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
     $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === name));
+    document.body.classList.toggle("world-mode-active",name==="world");
+    document.body.classList.remove("world-nav-open");
+    $("#world-mode-menu").setAttribute("aria-expanded","false");
+    $("#world-mode-menu").textContent="SHOW GAMEMODES";
     $("#current-location").textContent = pageTitles[name];
     if (name === "onevone") drawPong();
     if (name === "world") drawWorld();
@@ -45,6 +49,10 @@
   document.addEventListener("click", (event) => {
     const target = event.target.closest("[data-page]");
     if (target) { event.preventDefault(); setPage(target.dataset.page); }
+  });
+  $("#world-mode-menu").addEventListener("click",function(){
+    const open=document.body.classList.toggle("world-nav-open");
+    this.setAttribute("aria-expanded",String(open));this.textContent=`${open?"HIDE":"SHOW"} GAMEMODES`;
   });
 
   const lessons = [
@@ -459,7 +467,7 @@
   document.addEventListener("keydown",(event)=>{
     const key=event.key.toLowerCase();
     if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
-    keys.add(key);
+    if($("#page-onevone").classList.contains("active"))keys.add(key);
     if(game.qteTimer>0&&$("#page-onevone").classList.contains("active")&&["w","a","s","d"].includes(key)){
       if(key===game.qteSequence[game.qteIndex])game.qteIndex++;
       else game.qteIndex=key===game.qteSequence[0]?1:0;
@@ -642,13 +650,15 @@
   drawEvolution();
 
   const world=(()=>{
-    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],inventory:[],activeJob:null,tutorialDone:false};
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false};
     try{
       const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
       if(saved&&saved.format==="pong-world-save"&&saved.version===1)return{...defaults,...saved,
         recruits:Array.isArray(saved.recruits)?saved.recruits:[],openedLoot:Array.isArray(saved.openedLoot)?saved.openedLoot:[],
         inspected:Array.isArray(saved.inspected)?saved.inspected:[],talkedTo:Array.isArray(saved.talkedTo)?saved.talkedTo:[],
-        completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
+        completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],
+        defeatedGuards:Array.isArray(saved.defeatedGuards)?saved.defeatedGuards:[],completedActivities:Array.isArray(saved.completedActivities)?saved.completedActivities:[],
+        activityProgress:saved.activityProgress&&typeof saved.activityProgress==="object"?saved.activityProgress:{},inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
     }catch(error){console.error("Could not load Pong World save.",error)}
     return defaults;
   })();
@@ -664,6 +674,10 @@
   };
   const worldColors={structure:"#93baff",job:"#ffcf77",cache:"#a4f6b1",npc:"#c5adff",duel:"#ff9b72"};
   const worldTypes=["structure","job","cache","npc","duel"];
+  const dungeonKinds=["path","maze","riddle","treasure","rivals"];
+  const roomActivities=["cache","riddle","training","qte","rivals"];
+  const dungeonNames={path:"WINDING PATH",riddle:"ECHO PUZZLE",treasure:"TREASURE VAULT",rivals:"RIVAL GAUNTLET",maze:"GUARDIAN MAZE",beyond:"BEYOND THIS WORLD"};
+  const activityNames={cache:"SEALED CACHE",path:"WINDING PATH",riddle:"DIRECTIONAL PUZZLE",treasure:"TREASURE VAULT",training:"TARGET TRAINING",qte:"QUICKTIME TRIAL",rivals:"NPC RIVAL MATCH"};
   let worldInterior=null;
   function worldHash(x,y,salt=0){
     let value=Math.imul(x|0,374761393)+Math.imul(y|0,668265263)+Math.imul(world.seed|0,1442695041)+salt;
@@ -686,7 +700,12 @@
           used.add(key);
           const type=worldTypes[Math.floor(random()*worldTypes.length)];
           const names=worldNames[type],siteX=rx*regionSize+localX,siteY=ry*regionSize+localY;
-          sites.push({id:`${world.seed}:${rx}:${ry}:${index}`,x:siteX,y:siteY,type,name:names[Math.floor(random()*names.length)],dungeon:type==="structure"&&worldHash(siteX,siteY,411)%5===0,recruitable:type==="npc"&&random()<.58,jobKind:["courier","scavenger","sparring"][Math.floor(random()*3)]});
+          const name=names[Math.floor(random()*names.length)],recruitable=type==="npc"&&random()<.58;
+          const beyond=type==="structure"&&worldHash(siteX,siteY,412)%30===0;
+          const dungeon=type==="structure"&&(beyond||worldHash(siteX,siteY,411)%5===0);
+          const dungeonKind=dungeon?(beyond?"beyond":dungeonKinds[worldHash(siteX,siteY,413)%dungeonKinds.length]):null;
+          const roomActivity=type==="structure"?(dungeon?dungeonKind:roomActivities[worldHash(siteX,siteY,414)%roomActivities.length]):null;
+          sites.push({id:`${world.seed}:${rx}:${ry}:${index}`,x:siteX,y:siteY,type,name,dungeon,dungeonKind,roomActivity,recruitable,jobKind:["courier","scavenger","sparring"][Math.floor(random()*3)]});
         }
       }
     }
@@ -696,13 +715,57 @@
     return worldSitesNear(world.x,world.y).map((site)=>({...site,distance:Math.abs(site.x-world.x)+Math.abs(site.y-world.y)}))
       .filter((site)=>site.distance<=1).sort((a,b)=>a.distance-b.distance)[0]||null;
   }
+  function areaActivityKey(site){return`${site.id}:activity`}
+  function areaActivityComplete(site){return world.completedActivities.includes(areaActivityKey(site))}
+  function guardKey(site,index){return`${site.id}:guard-${index}`}
+  function completeWorldArea(site,message){
+    if(!areaActivityComplete(site)){
+      const reward=10+worldHash(site.x,site.y,601)%11;
+      world.completedActivities.push(areaActivityKey(site));world.tokens+=reward;world.xp+=reward*2;world.loot++;
+      world.inventory.push(`${site.name} relic`);
+      $("#world-message").textContent=`${message} You found a relic and ${reward} tokens.`;
+      toast(`Area cleared · relic found · +${reward} tokens`);
+      saveWorld();updateWorldStats();
+    }else $("#world-message").textContent=`${message} You already claimed this area's relic.`;
+    drawWorld();
+  }
+  function interiorWallCells(room){
+    if(!room.dungeon)return[];
+    if(room.dungeonKind==="path"){
+      const routes=[
+        [[4,6],[4,5],[5,5],[5,4],[5,3],[4,3],[4,2]],
+        [[4,6],[3,6],[3,5],[3,4],[4,4],[5,4],[5,3],[5,2],[4,2]],
+        [[4,6],[4,5],[3,5],[2,5],[2,4],[2,3],[3,3],[4,3],[4,2]]
+      ];
+      const route=routes[worldHash(room.site.x,room.site.y,622)%routes.length];
+      const openCells=new Set(route.map(([x,y])=>`${x},${y}`)),walls=[];
+      for(let y=1;y<=6;y++)for(let x=1;x<=7;x++)if(!openCells.has(`${x},${y}`))walls.push([x,y]);
+      return walls;
+    }
+    if(!["maze","beyond"].includes(room.dungeonKind))return[];
+    const base=[[1,4],[2,4],[3,4],[5,4],[6,4],[7,4],[1,2],[7,2]];
+    const variants=[
+      [[1,5],[2,5],[6,5],[7,5]],
+      [[1,3],[7,3],[2,1],[6,1]],
+      [[1,1],[7,1],[1,5],[7,5]]
+    ];
+    return base.concat(variants[worldHash(room.site.x,room.site.y,622)%variants.length]);
+  }
+  function areaGuardCount(site){return[1,2].filter((index)=>world.defeatedGuards.includes(guardKey(site,index))).length}
   function updateWorldActions(){
     const interact=$("#world-interact"),battle=$("#world-battle");
     if(worldInterior){
       const atExit=worldInterior.playerX===4&&worldInterior.playerY>=5;
-      interact.innerHTML=atExit?"LEAVE STRUCTURE&nbsp; <kbd>E</kbd>":"EXPLORE / TALK&nbsp; <kbd>E</kbd>";
-      battle.hidden=!worldInterior.dungeon||world.defeatedBosses.includes(worldInterior.site.id);
-      battle.textContent="CHALLENGE DUNGEON BOSS  ↗";
+      const activity=worldInterior.site.dungeonKind||worldInterior.site.roomActivity;
+      interact.innerHTML=atExit?"LEAVE AREA&nbsp; <kbd>E</kbd>":`EXPLORE / ${activityNames[activity]||dungeonNames[activity]||"INTERACT"}&nbsp; <kbd>E</kbd>`;
+      battle.hidden=false;
+      battle.textContent=worldInterior.dungeon&&activity==="path"&&!areaActivityComplete(worldInterior.site)
+        ?"FOLLOW THE PATH TO GOAL  ↗"
+        :worldInterior.dungeon&&["maze","beyond"].includes(activity)
+        ?`CHALLENGE ${world.defeatedBosses.includes(worldInterior.site.id)?"AREA":"GATE / BOSS"}  ↗`
+        :worldInterior.dungeon&&areaActivityComplete(worldInterior.site)
+          ?`CHALLENGE DUNGEON BOSS  ↗`
+          :`START ${activityNames[activity]||dungeonNames[activity]||"AREA ACTIVITY"}  ↗`;
       return;
     }
     interact.innerHTML="TALK / INTERACT&nbsp; <kbd>E</kbd>";
@@ -748,22 +811,53 @@
     for(let y=0;y<7;y++)for(let x=0;x<9;x++){
       c.fillStyle=(x+y)%2?"#293036":"#30373b";c.fillRect(180+x*48,78+y*48,46,46);
     }
+    const walls=interiorWallCells(room);
+    for(const [x,y] of walls){c.fillStyle="#11131b";c.fillRect(180+x*48,78+y*48,46,46);c.strokeStyle="#6a536f";c.strokeRect(184+x*48,82+y*48,38,38)}
     c.fillStyle="#11161d";c.fillRect(360,414,80,40);
     c.fillStyle="#86929e";c.font="10px monospace";c.textAlign="center";c.fillText("EXIT",400,444);
-    if(room.dungeon&&!world.defeatedBosses.includes(room.site.id)){
+    const isMaze=room.dungeon&&["maze","beyond"].includes(room.site.dungeonKind),guardsDefeated=areaGuardCount(room.site);
+    if(isMaze){
+      for(let index=1;index<=2;index++){
+        if(world.defeatedGuards.includes(guardKey(room.site,index)))continue;
+        const [gx,gy]=index===1?[2,2]:[6,2],guardX=203+gx*48,guardY=100+gy*48;
+        c.fillStyle="#ffcf77";c.shadowColor="#ff9b72";c.shadowBlur=12;c.beginPath();c.arc(guardX,guardY,12,0,Math.PI*2);c.fill();c.shadowBlur=0;
+        c.fillStyle="#17151a";c.font="bold 7px monospace";c.fillText(`AI ${index}`,guardX,guardY+3);
+      }
+    }
+    const activityDone=areaActivityComplete(room.site);
+    if(room.dungeon&&!world.defeatedBosses.includes(room.site.id)&&(!isMaze||guardsDefeated===2)&&activityDone){
       c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.shadowBlur=18;c.beginPath();c.arc(396,202,18,0,Math.PI*2);c.fill();c.shadowBlur=0;
       c.fillStyle="#15151b";c.font="bold 9px monospace";c.fillText("BOSS",396,205);
+    }else if(isMaze&&guardsDefeated<2){
+      c.fillStyle="#ffcf77";c.fillRect(365,178,70,42);c.fillStyle="#241a15";c.font="bold 8px monospace";c.fillText(`${2-guardsDefeated} GATE AI`,400,202);
+    }else if(!activityDone&&(!room.dungeon||!isMaze)){
+      const activity=room.site.dungeonKind||room.site.roomActivity;
+      c.shadowBlur=10;
+      if(activity==="treasure"){
+        c.fillStyle="#ffcf77";c.shadowColor="#ffcf77";c.fillRect(382,192,28,20);c.fillRect(379,188,34,6);
+        c.fillStyle="#3a2a19";c.fillRect(394,195,5,10);
+      }else if(activity==="rivals"){
+        c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";
+        c.beginPath();c.arc(386,196,8,0,Math.PI*2);c.arc(406,196,8,0,Math.PI*2);c.fill();
+        c.fillRect(380,204,12,10);c.fillRect(400,204,12,10);
+      }else if(activity==="path"){
+        c.fillStyle="#a4f6b1";c.shadowColor="#a4f6b1";c.fillRect(392,188,8,26);c.beginPath();c.moveTo(400,190);c.lineTo(414,195);c.lineTo(400,201);c.fill();
+      }else{
+        c.fillStyle="#c5adff";c.shadowColor="#c5adff";c.beginPath();c.arc(396,202,12,0,Math.PI*2);c.fill();
+      }
+      c.shadowBlur=0;c.fillStyle="#16131d";c.font="bold 7px monospace";
+      c.fillText(activity==="treasure"?"CHEST":activity==="rivals"?"RIVALS":activity==="path"?"GOAL":activity==="riddle"?"PUZZLE":"TRIAL",396,activity==="treasure"?205:activity==="path"?208:205);
     }else{
       c.fillStyle="#93baff";c.fillRect(365,178,70,42);c.fillStyle="#151b22";c.font="bold 9px monospace";c.fillText(room.dungeon?"CLEARED":"SAFE ROOM",400,202);
     }
     const px=204+room.playerX*48,py=102+room.playerY*48;
     c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=12;c.beginPath();c.arc(px,py,11,0,Math.PI*2);c.fill();c.shadowBlur=0;
-    c.fillStyle="#e8fff9";c.font="bold 9px monospace";c.fillText(room.dungeon?"DUNGEON · BOSS INSIDE":room.site.name.toUpperCase(),400,31);
-    c.fillStyle="#84919f";c.font="9px monospace";c.fillText("MOVE WITH WASD · E NEAR THE DOOR TO EXIT",400,477);
+    c.fillStyle="#e8fff9";c.font="bold 9px monospace";c.fillText(room.dungeon?`${dungeonNames[room.site.dungeonKind]||"DUNGEON"} · ${room.site.name.toUpperCase()}`:room.site.name.toUpperCase(),400,31);
+    c.fillStyle="#84919f";c.font="9px monospace";c.fillText("MOVE WASD · E AT TRIAL / GUARD / EXIT",400,477);
     $("#world-location").textContent=room.dungeon?"DUNGEON INTERIOR":`${room.site.name.toUpperCase()} · INTERIOR`;
     $("#world-message").textContent=room.dungeon
-      ?world.defeatedBosses.includes(room.site.id)?"The boss is defeated. The glowing entrance at the bottom leads back outside.":"A boss blocks the far end of this room. Move close and press E to challenge it; press E near the exit to leave."
-      :"You are inside a bounded structure. Explore the room, then move to the marked exit and press E.";
+      ?world.defeatedBosses.includes(room.site.id)?"The boss is defeated. The glowing entrance at the bottom leads back outside.":isMaze?`${2-guardsDefeated} guardian AI(s) block the maze. Defeat them before you can challenge the boss.`:"A boss blocks the far end of this room. Move close and press E to challenge it; press E near the exit to leave."
+      :activityDone?"The activity is complete. Return to the entrance or challenge the dungeon boss.":`A ${activityNames[room.site.dungeonKind||room.site.roomActivity]||"world activity"} waits in the middle of the room. Complete it before challenging any dungeon boss.`;
     updateWorldStats();$("#world-location").textContent=room.dungeon?"DUNGEON INTERIOR":`${room.site.name.toUpperCase()} · INTERIOR`;
     updateWorldActions();
   }
@@ -789,7 +883,7 @@
     c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=15;c.beginPath();c.arc(playerX,playerY-5,8,0,Math.PI*2);c.fill();
     c.fillRect(playerX-7,playerY+3,14,14);c.shadowBlur=0;c.fillStyle="#10211f";c.fillRect(playerX-3,playerY-7,2,2);c.fillRect(playerX+2,playerY-7,2,2);
     const nearby=nearestWorldSite();
-    $("#world-message").textContent=nearby?`${nearby.name}${nearby.dungeon?" · DUNGEON":""} nearby. Press the large interact button or E to ${nearby.dungeon?"enter and challenge its boss":nearby.type==="duel"?"start a 1v1 match":nearby.type==="cache"?"open it":nearby.type==="npc"?"talk":"interact"}.`:`New ground, new possibilities. Move with WASD. Press E near a landmark to interact.`;
+    $("#world-message").textContent=nearby?`${nearby.name}${nearby.dungeon?" · DUNGEON":""} nearby. Press the large interact button or E to ${nearby.dungeon?"enter and explore its varied rooms":nearby.type==="duel"?"start a 1v1 match":nearby.type==="cache"?"open it":nearby.type==="npc"?"talk":"interact"}.`:`New ground, new possibilities. Move with WASD. Press E near a landmark to interact.`;
     updateWorldStats();
     updateWorldActions();
   }
@@ -816,23 +910,144 @@
     world.activeJob=job;$("#world-message").textContent=`Contract accepted: ${job.name}. ${kind==="courier"?"Travel 8 tiles.":kind==="scavenger"?"Open 2 supply caches.":"Win a 1v1 duel."}`;
     saveWorld();updateWorldStats();
   }
+  const keyGlyphs={ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",w:"W",a:"A",s:"S",d:"D"};
+  const beyondCode=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
+  let activeActivity=null,beyondAnimation=0,beyondFrame=0;
+  function makeActivitySequence(site,kind){
+    if(kind==="riddle")return["ArrowUp","ArrowRight","ArrowDown","ArrowLeft","ArrowUp"];
+    if(kind==="qte")return Array.from({length:6},(_,index)=>["ArrowUp","ArrowRight","ArrowDown","ArrowLeft"][(worldHash(site.x,site.y,710+index)%4)]);
+    return["w","d","s","a","w","d"];
+  }
+  function renderActivitySequence(sequence,index){
+    $("#world-activity-sequence").innerHTML=sequence.map((key,i)=>`<kbd class="${i===index?"current":""}">${keyGlyphs[key]||key.toUpperCase()}</kbd>`).join("");
+  }
+  function beginWorldActivity(site){
+    const kind=site.dungeonKind||site.roomActivity;
+    if(areaActivityComplete(site)){completeWorldArea(site,"This area is already cleared.");return}
+    if(kind==="cache"||kind==="treasure"){completeWorldArea(site,kind==="treasure"?"You opened the dungeon treasure vault.":"You opened the sealed cache.");return}
+    if(kind==="rivals"){openWorldBattle(site,false);return}
+    if(kind==="maze"||kind==="beyond"){
+      const nextGuard=[1,2].find((index)=>!world.defeatedGuards.includes(guardKey(site,index)));
+      if(nextGuard){openWorldBattle(site,true,nextGuard);return}
+      if(world.defeatedBosses.includes(site.id)){completeWorldArea(site,"The dungeon is already cleared.");return}
+      if(kind==="beyond")openBeyondBoss(site);else openWorldBattle(site,true);
+      return;
+    }
+    if(kind==="path"){completeWorldArea(site,"The winding dungeon path is cleared.");return}
+    const sequence=makeActivitySequence(site,kind);
+    activeActivity={site,kind,sequence,index:0,timeLeft:kind==="qte"?12:0,timer:null};
+    $("#world-activity-tag").textContent=dungeonNames[kind]||activityNames[kind]||"WORLD TRIAL";
+    $("#world-activity-title").textContent=kind==="riddle"?"Read the echo":kind==="training"?"Hit the training pattern":"Stay on the beat";
+    $("#world-activity-copy").textContent=kind==="riddle"?"Enter the directional sequence etched into the court.":kind==="training"?"Repeat the paddle movement pattern to calibrate your aim.":"Enter the sequence before the timer expires. One mistake resets the trial.";
+    renderActivitySequence(sequence,0);$("#world-activity-progress").textContent=kind==="qte"?"12 SECONDS · NO MISSES":"0 / "+sequence.length;
+    $("#world-activity-overlay").classList.remove("hidden");
+    if(kind==="qte")activeActivity.timer=setInterval(()=>{
+      if(!activeActivity)return;
+      activeActivity.timeLeft--;
+      $("#world-activity-progress").textContent=`${activeActivity.timeLeft} SECONDS · ${activeActivity.index}/${sequence.length}`;
+      if(activeActivity.timeLeft<=0)closeWorldActivity("The reflex trial timed out. Try again.");
+    },1000);
+  }
+  function closeWorldActivity(message="Challenge closed."){
+    if(activeActivity?.timer)clearInterval(activeActivity.timer);
+    activeActivity=null;$("#world-activity-overlay").classList.add("hidden");
+    if(message)$("#world-message").textContent=message;
+  }
+  function handleWorldActivityKey(event){
+    if(activeActivity?.beyond){if(handleBeyondKey(event)){event.preventDefault();event.stopImmediatePropagation()}return}
+    if(!activeActivity||$("#world-activity-overlay").classList.contains("hidden"))return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const key=event.key.length===1?event.key.toLowerCase():event.key;
+    if(key!==activeActivity.sequence[activeActivity.index]){
+      activeActivity.index=0;renderActivitySequence(activeActivity.sequence,0);
+      $("#world-activity-progress").textContent=activeActivity.kind==="qte"?`${activeActivity.timeLeft} SECONDS · WRONG KEY — RESET`:`WRONG KEY · RESET TO 0/${activeActivity.sequence.length}`;
+      return;
+    }
+    activeActivity.index++;
+    renderActivitySequence(activeActivity.sequence,activeActivity.index);
+    if(activeActivity.index>=activeActivity.sequence.length){
+      const site=activeActivity.site,kind=activeActivity.kind;
+      closeWorldActivity(null);
+      completeWorldArea(site,kind==="training"?"Training complete.":kind==="riddle"?"The echo puzzle is solved.":"Quicktime trial cleared.");
+      return;
+    }
+    $("#world-activity-progress").textContent=activeActivity.kind==="qte"?`${activeActivity.timeLeft} SECONDS · ${activeActivity.index}/${activeActivity.sequence.length}`:`${activeActivity.index} / ${activeActivity.sequence.length}`;
+  }
+  $("#world-activity-close").addEventListener("click",()=>closeWorldActivity());
+  $("#world-activity-overlay").addEventListener("click",(event)=>{if(event.target.id==="world-activity-overlay")closeWorldActivity()});
+  document.addEventListener("keydown",handleWorldActivityKey);
+  function drawBeyondBoss(){
+    if(!activeActivity?.beyond)return;
+    const canvas=$("#world-beyond-canvas"),context=canvas.getContext("2d"),t=(performance.now()-beyondAnimation)/1000,w=canvas.width,h=canvas.height;
+    context.clearRect(0,0,w,h);context.fillStyle="#090712";context.fillRect(0,0,w,h);
+    context.strokeStyle="#342844";context.lineWidth=1;
+    for(let i=0;i<8;i++){const y=65+i*42,shift=Math.sin(t*.7+i)*44;context.beginPath();context.moveTo(0,y+shift);context.lineTo(w,y-shift);context.stroke()}
+    context.setLineDash([5,8]);context.beginPath();context.moveTo(w/2,0);context.lineTo(w/2,h);context.stroke();context.setLineDash([]);
+    const x=w/2+Math.sin(t*1.4)*200,z=Math.sin(t*.8)*.5+.5,y=h/2+Math.cos(t*1.9)*105-z*22,size=16+z*28;
+    context.save();context.translate(x,y);context.rotate(t*.8);
+    context.fillStyle="#ff7caa";context.shadowColor="#d981ff";context.shadowBlur=28;
+    context.beginPath();context.ellipse(0,0,size*1.2,size*.65,Math.sin(t)*.5,0,Math.PI*2);context.fill();
+    context.fillStyle="#f6e8ff";context.beginPath();context.arc(-size*.3,-size*.12,Math.max(3,size*.12),0,Math.PI*2);context.arc(size*.3,-size*.12,Math.max(3,size*.12),0,Math.PI*2);context.fill();
+    context.restore();context.shadowBlur=0;context.fillStyle="#d6b7ef";context.font="11px monospace";context.textAlign="center";context.fillText("X / Y / DEPTH DO NOT AGREE",w/2,h-20);
+    beyondFrame=requestAnimationFrame(drawBeyondBoss);
+  }
+  function renderBeyondCode(index){
+    $("#world-beyond-code").innerHTML=beyondCode.map((key,i)=>`<kbd class="${i===index?"current":""}">${keyGlyphs[key]}</kbd>`).join("");
+  }
+  function openBeyondBoss(site){
+    activeActivity={site,kind:"beyond",beyond:true,index:0,health:3};
+    $("#world-beyond-overlay").classList.remove("hidden");$("#world-beyond-message").textContent="The boss moves in three dimensions. You only get this projection. Enter the Konami arrow code to land a hit.";
+    $("#world-beyond-health").textContent="BOSS HEALTH · 3";renderBeyondCode(0);
+    beyondAnimation=performance.now();cancelAnimationFrame(beyondFrame);beyondFrame=requestAnimationFrame(drawBeyondBoss);
+  }
+  function handleBeyondKey(event){
+    if(!activeActivity?.beyond)return false;
+    if(event.key!==beyondCode[activeActivity.index]){activeActivity.index=0;renderBeyondCode(0);$("#world-beyond-message").textContent="Wrong direction. The projection shifts; start the code again.";return true}
+    activeActivity.index++;renderBeyondCode(activeActivity.index);
+    if(activeActivity.index===beyondCode.length){
+      activeActivity.index=0;activeActivity.health--;renderBeyondCode(0);
+      $("#world-beyond-health").textContent=`BOSS HEALTH · ${activeActivity.health}`;
+      $("#world-beyond-message").textContent=activeActivity.health?`Direct hit! The boss slips into another dimension. ${activeActivity.health} more hit${activeActivity.health===1?"":"s"} needed.`:"The impossible projection collapses. You won.";
+      if(activeActivity.health<=0){
+        const site=activeActivity.site;activeActivity=null;cancelAnimationFrame(beyondFrame);$("#world-beyond-overlay").classList.add("hidden");
+        world.defeatedBosses.push(site.id);completeWorldArea(site,"The Beyond boss is defeated.");
+      }
+    }
+    return true;
+  }
+  $("#world-beyond-close").addEventListener("click",()=>{activeActivity=null;cancelAnimationFrame(beyondFrame);$("#world-beyond-overlay").classList.add("hidden")});
+  $("#world-beyond-overlay").addEventListener("click",(event)=>{if(event.target.id==="world-beyond-overlay")$("#world-beyond-close").click()});
   function enterWorldStructure(site){
     worldInterior={site,dungeon:site.dungeon,playerX:4,playerY:6};
-    toast(site.dungeon?"Dungeon discovered · find the boss inside":"Entering structure");
+    toast(site.dungeon?`${dungeonNames[site.dungeonKind]||"Dungeon"} · activity inside`:"Area discovered · explore its trial");
     drawWorld();
   }
   function interactWorld(){
     if(worldInterior){
       const {site,dungeon,playerX,playerY}=worldInterior;
-      if(dungeon&&!world.defeatedBosses.includes(site.id)&&Math.abs(playerX-4)+Math.abs(playerY-2)<=1){
-        openWorldBattle(site,true);return;
+      const maze=dungeon&&["maze","beyond"].includes(site.dungeonKind);
+      if(maze){
+        for(let index=1;index<=2;index++){
+          if(world.defeatedGuards.includes(guardKey(site,index)))continue;
+          const [gx,gy]=index===1?[2,2]:[6,2];
+          if(Math.abs(playerX-gx)+Math.abs(playerY-gy)<=1){openWorldBattle(site,true,index);return}
+        }
+        if(areaGuardCount(site)===2&&!world.defeatedBosses.includes(site.id)&&Math.abs(playerX-4)+Math.abs(playerY-2)<=1){
+          beginWorldActivity(site);return;
+        }
+      }else if(dungeon&&!world.defeatedBosses.includes(site.id)&&Math.abs(playerX-4)+Math.abs(playerY-2)<=1){
+        if(areaActivityComplete(site))openWorldBattle(site,true);
+        else beginWorldActivity(site);
+        return;
+      }else if(!dungeon&&!areaActivityComplete(site)&&Math.abs(playerX-4)+Math.abs(playerY-2)<=1){
+        beginWorldActivity(site);return;
       }
       if(playerX===4&&playerY>=5){
         worldInterior=null;drawWorld();$("#world-message").textContent=`You stepped outside ${site.name}. Press E near another marker to interact.`;return;
       }
       $("#world-message").textContent=dungeon
-        ?world.defeatedBosses.includes(site.id)?"The dungeon is clear. Return to the entrance and press E to leave.":"A boss blocks the northern chamber. Move close to it and press E to begin the fight."
-        :`Inside ${site.name}, old markings point toward the exit. Explore the room, or return to the entrance and press E to leave.`;
+        ?world.defeatedBosses.includes(site.id)?"The dungeon is clear. Return to the entrance and press E to leave.":maze?`Explore the maze. ${2-areaGuardCount(site)} guardian AI(s) remain, then the Beyond boss awaits. Move next to a marker and press E to fight.`:"A boss blocks the northern chamber. Move close and press E to begin the fight."
+        :areaActivityComplete(site)?`Inside ${site.name}, the trial is complete. Return to the entrance and press E to leave.`:`Move to the ${activityNames[site.roomActivity]||"activity"} marker in the middle and press E, or use the challenge button.`;
       return;
     }
     const site=nearestWorldSite();
@@ -867,8 +1082,9 @@
   }
   function moveWorld(dx,dy){
     if(worldInterior){
-      worldInterior.playerX=Math.max(1,Math.min(7,worldInterior.playerX+dx));
-      worldInterior.playerY=Math.max(1,Math.min(6,worldInterior.playerY+dy));
+      const nextX=Math.max(1,Math.min(7,worldInterior.playerX+dx)),nextY=Math.max(1,Math.min(6,worldInterior.playerY+dy));
+      if(interiorWallCells(worldInterior).some(([x,y])=>x===nextX&&y===nextY))return;
+      worldInterior.playerX=nextX;worldInterior.playerY=nextY;
       drawWorld();return;
     }
     world.x+=dx;world.y+=dy;
@@ -878,9 +1094,10 @@
   const tutorialSteps=[
     "Move with W, A, S, D or the arrow keys. The camera follows you, and new territory keeps appearing in every direction.",
     "Walk next to a person, structure, job board, supply cache, or court. Press the large TALK / INTERACT button or E, then read the dialogue below the map.",
-    "Structures open into bounded rooms. Some are dungeons: move to the boss marker and press E to begin a boss match; return to the entrance to leave.",
+    "Every structure has a reward or activity: caches, directional puzzles, target training, timed trials, and rival matches. Rooms are bounded; return to the entrance to leave.",
+    "Dungeon routes vary: winding paths, guardian mazes, puzzles, treasure vaults, and rival gauntlets all lead to a boss. The rare Beyond encounter uses a moving 3D boss.",
     "Job boards offer courier, salvage, and 1v1 sparring contracts. Complete the task to earn tokens; caches have randomized loot.",
-    "Challenge rival courts in one-on-one matches. Move with W/S, tilt with A/D, collect powerups, and land quicktime combos."
+    "Challenge rival courts in one-on-one matches. Move with W/S, tilt with A/D, collect powerups, and land quicktime combos. QTEs come up regularly, and tilt stays active briefly after release to make timing more forgiving."
   ];
   let tutorialStep=0;
   function renderWorldTutorial(){
@@ -898,19 +1115,33 @@
   $("#world-tutorial-close").addEventListener("click",()=>$("#world-tutorial-controls").classList.add("hidden"));
   $("#world-interact").addEventListener("click",interactWorld);
   $("#world-battle").addEventListener("click",()=>{
-    if(worldInterior?.dungeon)openWorldBattle(worldInterior.site,true);
+    if(worldInterior?.dungeon&&worldInterior.site.dungeonKind==="path"&&!areaActivityComplete(worldInterior.site)){
+      $("#world-message").textContent="Follow the winding route to the goal, then press E to clear the path.";
+    }else if(worldInterior&&!worldInterior.dungeon)beginWorldActivity(worldInterior.site);
+    else if(worldInterior&&["maze","beyond"].includes(worldInterior.site.dungeonKind))beginWorldActivity(worldInterior.site);
+    else if(worldInterior?.dungeon&&areaActivityComplete(worldInterior.site))openWorldBattle(worldInterior.site,true);
+    else if(worldInterior?.dungeon)beginWorldActivity(worldInterior.site);
     else openWorldBattle(null,false);
   });
 
-  const worldBattle={running:false,active:false,left:180,right:180,leftTilt:0,rightTilt:0,ball:{x:400,y:180,vx:5,vy:2.5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0},extraBalls:[],scoreLeft:0,scoreRight:0,last:0,pointPause:0,lastHit:"left",rallies:0,orb:null,orbTimer:2,powers:{left:null,right:null},boosts:{left:0,right:0},powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,qteStage:0,boss:false,bossStage:0,bossTarget:0,bossHealth:3,site:null};
+  const worldBattle={running:false,active:false,left:180,right:180,leftTilt:0,rightTilt:0,tiltAssistTimer:0,tiltAssistAngle:0,teleport:null,ball:{x:400,y:180,vx:5,vy:2.5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0},extraBalls:[],scoreLeft:0,scoreRight:0,last:0,pointPause:0,lastHit:"left",rallies:0,playerReturns:0,orb:null,orbTimer:2,powers:{left:null,right:null},boosts:{left:0,right:0},powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,boss:false,bossStage:0,bossStack:0,bossHealth:3,site:null,guardIndex:null};
   function allWorldBattleBalls(){return [worldBattle.ball,...worldBattle.extraBalls]}
+  function worldBattlePaddleHeight(side){
+    if(worldBattle.boosts[side]>0)return 84;
+    return side==="left"?72:54;
+  }
   function drawWorldBattle(){
     const c=worldBattleCtx;if(!c)return;
     const w=worldBattleCanvas.width,h=worldBattleCanvas.height;
     c.clearRect(0,0,w,h);c.fillStyle="#0b1119";c.fillRect(0,0,w,h);
     c.strokeStyle="#293544";c.setLineDash([6,9]);c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.stroke();c.setLineDash([]);
-    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.save();c.translate(30,worldBattle.left);c.rotate(worldBattle.leftTilt);c.fillRect(-5,-(worldBattle.boosts.left>0?42:27),10,worldBattle.boosts.left>0?84:54);c.restore();
-    c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.save();c.translate(w-30,worldBattle.right);c.rotate(worldBattle.rightTilt);c.fillRect(-5,-(worldBattle.boosts.right>0?42:27),10,worldBattle.boosts.right>0?84:54);c.restore();
+    const leftHeight=worldBattlePaddleHeight("left"),rightHeight=worldBattlePaddleHeight("right");
+    if(worldBattle.teleport){
+      const progress=Math.min(1,worldBattle.teleport.elapsed/worldBattle.teleport.duration);
+      c.strokeStyle=`rgba(125,242,227,${(1-progress)*.55})`;c.lineWidth=4;c.beginPath();c.moveTo(30,worldBattle.teleport.from);c.lineTo(30,worldBattle.teleport.to);c.stroke();
+    }
+    c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.save();c.translate(30,worldBattle.left);c.rotate(worldBattle.leftTilt);c.fillRect(-5,-leftHeight/2,10,leftHeight);c.restore();
+    c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.save();c.translate(w-30,worldBattle.right);c.rotate(worldBattle.rightTilt);c.fillRect(-5,-rightHeight/2,10,rightHeight);c.restore();
     for(const ball of allWorldBattleBalls()){
       c.fillStyle=ball.type==="fast"||ball.type==="splitFast"?"#ffe3a3":ball.type==="slow"||ball.type==="splitSlow"?"#b9d8ff":"#edfff9";
       c.shadowColor=ball.type==="fast"||ball.type==="splitFast"?"#ffcf77":ball.type==="slow"||ball.type==="splitSlow"?"#93baff":"#7df2e3";
@@ -928,40 +1159,47 @@
     const speed=4.4+Math.random()*1.2;
     worldBattle.ball={x:worldBattleCanvas.width/2,y:worldBattleCanvas.height/2,vx:direction*speed,vy:(Math.random()-.5)*5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0};
     worldBattle.extraBalls=[];worldBattle.orb=null;worldBattle.orbTimer=2+Math.random()*2;
-    worldBattle.powers={left:null,right:null};worldBattle.boosts={left:0,right:0};worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.rallies=0;worldBattle.lastHit=direction>0?"left":"right";
+    worldBattle.powers={left:null,right:null};worldBattle.boosts={left:0,right:0};worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.rallies=0;worldBattle.playerReturns=0;worldBattle.teleport=null;worldBattle.tiltAssistTimer=0;worldBattle.leftTilt=0;worldBattle.rightTilt=0;worldBattle.lastHit=direction>0?"left":"right";
     worldBattle.pointPause=35;$("#world-battle-qte").classList.add("hidden");
   }
-  function startWorldQte(stage=0){
-    worldBattle.qteSequence=randomQteSequence();worldBattle.qteIndex=0;worldBattle.qteTimer=6;worldBattle.qteStage=stage;
-    const label=worldBattle.boss?`BOSS TRIPLE HIT · ${stage===1?"HIT 1 / 3":stage===2?"HIT 2 / 3":"HIT 3 / 3"}`:"QUICK RETURN";
+  function startWorldQte(){
+    worldBattle.qteSequence=randomQteSequence();worldBattle.qteIndex=0;worldBattle.qteTimer=9;
+    const label=worldBattle.boss?`BOSS TILT STACK · QTE ${worldBattle.bossStack+1}`:"QUICK RETURN";
     $("#world-battle-qte").innerHTML=`<span>${label}</span>${worldBattle.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("")}`;
     $("#world-battle-qte").classList.remove("hidden");
-    $("#world-battle-message").textContent=worldBattle.boss?"Time slows while you line up the next hit. Enter the keys in order.":"Time slowed! Complete the combo for a bigger paddle and faster return.";
+    $("#world-battle-message").textContent=worldBattle.boss?"Enter the combo. Each success speeds the ball and warps your paddle toward it.":"Quicktime combo ready. You have 9 seconds; the rally pauses while you enter it.";
   }
   function completeWorldQte(success){
     $("#world-battle-qte").classList.add("hidden");worldBattle.qteTimer=0;
-    if(!success){worldBattle.bossStage=0;$("#world-battle-message").textContent="Combo missed. The rally continues.";return}
+    if(!success){
+      worldBattle.bossStage=0;worldBattle.bossStack=0;
+      $("#world-battle-message").textContent=worldBattle.boss?"Combo missed. The rally continues; the tilt stack resets.":"Combo missed. The rally continues.";
+      return;
+    }
     worldBattle.boosts.left=Math.max(worldBattle.boosts.left,2.5);
     if(worldBattle.boss){
-      if(worldBattle.qteStage===1){
-        worldBattle.bossStage=2;worldBattle.bossTarget=worldBattleCanvas.width*.375;
-        worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.12;worldBattle.ball.vy*=1.08;
-        $("#world-battle-message").textContent="HIT 1 LANDED · follow the ball to the halfway mark!";
-      }else if(worldBattle.qteStage===2){
-        worldBattle.bossStage=3;worldBattle.bossTarget=worldBattleCanvas.width/2;
-        worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.08;
-        $("#world-battle-message").textContent="HIT 2 LANDED · one final strike on the center line!";
-      }else{
-        worldBattle.bossHealth--;worldBattle.bossStage=0;
-        $("#world-battle-message").textContent=`TRIPLE HIT! BOSS HEALTH: ${worldBattle.bossHealth} / 3`;
-        if(worldBattle.bossHealth<=0){finishWorldBattle(true);return}
-        worldBattle.ball.x=worldBattleCanvas.width/2+8;worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.2;
-      }
+      worldBattle.bossStack++;
+      worldBattle.ball.vx=Math.abs(worldBattle.ball.vx)*1.18;worldBattle.ball.vy*=1.18;
+      const paddleHalf=worldBattlePaddleHeight("left")/2;
+      worldBattle.teleport={from:worldBattle.left,to:Math.max(paddleHalf,Math.min(worldBattleCanvas.height-paddleHalf,worldBattle.ball.y)),elapsed:0,duration:14};
+      if(worldBattle.ball.x<worldBattleCanvas.width/2)startWorldQte();
+      else completeWorldBossStack();
     }else{
       const speed=Math.hypot(worldBattle.ball.vx,worldBattle.ball.vy);
       worldBattle.ball.vx*=Math.min(1.2,(speed+1.5)/speed);worldBattle.ball.vy*=Math.min(1.2,(speed+1.5)/speed);
       $("#world-battle-message").textContent="Perfect combo · temporary paddle boost and faster shot!";
     }
+  }
+  function completeWorldBossStack(){
+    const stack=worldBattle.bossStack;
+    if(stack>0)worldBattle.bossHealth--;
+    worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.bossStack=0;$("#world-battle-qte").classList.add("hidden");
+    $("#world-battle-message").textContent=stack>0
+      ?`${stack} QTE${stack===1?"":"s"} stacked · BOSS HEALTH: ${worldBattle.bossHealth} / 3`
+      :"The ball crossed the halfway line before a combo landed. No boss damage this volley.";
+    if(worldBattle.bossHealth<=0){finishWorldBattle(true);return}
+    worldBattle.ball.x=worldBattleCanvas.width/2;
+    worldBattle.ball.vx=-Math.abs(worldBattle.ball.vx);
   }
   function giveWorldBattlePower(side,type){
     if(type==="paddle")worldBattle.boosts[side]=10;
@@ -977,7 +1215,7 @@
     worldBattle.extraBalls.push({x:ball.x,y:ball.y,vx:direction*Math.cos(angle+.3)*speed*.85,vy:Math.sin(angle+.3)*speed*.85,type:"splitSlow",powerOwner:side,powerTimer:10,baseSpeed:speed*.85});
   }
   function hitWorldBattlePaddle(ball,side){
-    const isPlayer=side==="left",paddleY=worldBattle[side],height=worldBattle.boosts[side]>0?84:54;
+    const isPlayer=side==="left",paddleY=worldBattle[side],height=worldBattlePaddleHeight(side);
     if(ball.type==="fast"&&ball.powerOwner!==side){
       const speed=Math.hypot(ball.vx,ball.vy),base=ball.baseSpeed||speed/1.65;ball.vx*=base/speed;ball.vy*=base/speed;ball.type="normal";
     }
@@ -987,9 +1225,10 @@
     const contact=(ball.y-paddleY)/(height/2);
     if(ball.type==="splitSlow"){
       const speed=ball.baseSpeed||Math.hypot(ball.vx,ball.vy);
-      ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;ball.vx=(isPlayer?1:-1)*speed;ball.vy+=(ball.y-paddleY)*.035;
+      ball.type="normal";ball.powerOwner=null;ball.powerTimer=0;ball.vx=(isPlayer?1:-1)*speed;ball.vy+=(ball.y-paddleY)*.035+Math.sin(isPlayer?worldBattle.leftTilt:worldBattle.rightTilt)*.6;
     }else{
-      ball.vx=(isPlayer?1:-1)*Math.abs(ball.vx)*1.045;ball.vy+=contact*.11;
+      ball.vx=(isPlayer?1:-1)*Math.abs(ball.vx)*1.045;
+      ball.vy+=contact*.11+Math.sin(isPlayer?worldBattle.leftTilt:worldBattle.rightTilt)*.6;
     }
     const power=worldBattle.powers[side];
     if(power){
@@ -1002,8 +1241,9 @@
     }
     worldBattle.lastHit=side;worldBattle.rallies++;
     if(isPlayer){
-      if(worldBattle.boss)startWorldQte(1);
-      else if(worldBattle.rallies>=3&&Math.random()<.2)startWorldQte();
+      worldBattle.playerReturns++;
+      if(worldBattle.boss){worldBattle.bossStage=1;worldBattle.bossStack=0;startWorldQte()}
+      else if(worldBattle.playerReturns%2===0)startWorldQte();
     }
   }
   function awardWorldBattlePoint(missedSide){
@@ -1018,26 +1258,34 @@
     worldBattle.running=false;
     if(won){
       world.wins++;const reward=worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.boss?60:30;
-      if(worldBattle.boss&&worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id))world.defeatedBosses.push(worldBattle.site.id);
-      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
+      if(worldBattle.guardIndex&&worldBattle.site&&!world.defeatedGuards.includes(guardKey(worldBattle.site,worldBattle.guardIndex)))world.defeatedGuards.push(guardKey(worldBattle.site,worldBattle.guardIndex));
+      else if(worldBattle.boss&&worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id)){
+        world.defeatedBosses.push(worldBattle.site.id);completeWorldArea(worldBattle.site,"Dungeon boss defeated.");
+      }
+      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.guardIndex?"guardian defeated":worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
       toast(`Match won · +${reward} tokens`);advanceWorldJob("sparring");
+      if(worldBattle.site&&!worldBattle.boss&&worldBattle.site.type==="structure")completeWorldArea(worldBattle.site,"Rival match won.");
     }else $("#world-battle-message").textContent="RIVAL WINS. Regroup and challenge another court.";
     $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;
     saveWorld();updateWorldStats();updateWorldActions();drawWorld();
   }
-  function openWorldBattle(site,boss=false){
+  function openWorldBattle(site,boss=false,guardIndex=null){
     worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;
-    worldBattle.boss=boss;worldBattle.bossStage=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;
-    $("#world-battle-title").textContent=boss?`${site.name.toUpperCase()} · BOSS`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
-    $("#world-battle-message").textContent=boss?"Land three triple-hit combos to defeat the boss. Each combo has three slowed-down QTE strikes.":"Move with W/S, tilt with A/D, and collect center-line powerups. First to 5 wins.";
+    worldBattle.boss=boss;worldBattle.guardIndex=guardIndex;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;worldBattle.playerReturns=0;
+    $("#world-battle-title").textContent=boss?`${site.name.toUpperCase()} · ${guardIndex?"GATE AI":"BOSS"}`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
+    $("#world-battle-message").textContent=boss?"Stack QTEs before the halfway line to damage the boss. Each hit speeds up the ball and warps your paddle toward it.":"Move with W/S, tilt with A/D, and collect center-line powerups. Tilt lingers briefly after release; QTEs trigger every other player return.";
     $("#world-battle-start").textContent="START MATCH  ↗";$("#world-battle-start").disabled=false;
     $("#world-battle-overlay").classList.remove("hidden");$("#world-score-left").textContent="0";$("#world-score-right").textContent="0";
     resetWorldBall();drawWorldBattle();
   }
   $("#world-battle-start").addEventListener("click",()=>{
+    const alreadyDefeated=worldBattle.site&&(worldBattle.boss
+      ?worldBattle.guardIndex?world.defeatedGuards.includes(guardKey(worldBattle.site,worldBattle.guardIndex)):world.defeatedBosses.includes(worldBattle.site.id)
+      :worldBattle.site.type==="structure"&&areaActivityComplete(worldBattle.site));
+    if(alreadyDefeated){worldBattle.active=false;$("#world-battle-overlay").classList.add("hidden");drawWorld();return}
     worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;worldBattle.running=true;
     $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";$("#world-battle-start").disabled=true;
-    $("#world-battle-message").textContent=worldBattle.boss?"Land three triple-hit combos. The QTE pauses the rally between strikes.":"First to 5 wins · collect powerups · A/D tilt.";
+    $("#world-battle-message").textContent=worldBattle.boss?"Stack QTEs before the halfway line. The ball moves slowly while you enter each combo.":"First to 5 wins · QTEs trigger every other player return · A/D tilt lingers briefly.";
     resetWorldBall();drawWorldBattle();
   });
   $("#world-battle-power-toggle").addEventListener("click",function(){
@@ -1051,12 +1299,22 @@
     const dt=Math.min((time-worldBattle.last)/16.67||1,2.4);worldBattle.last=time;
     if(worldBattle.running&&$("#page-world").classList.contains("active")){
       const h=worldBattleCanvas.height,w=worldBattleCanvas.width,slowDt=worldBattle.qteTimer>0?dt*.08:dt,paddleSpeed=5.2*slowDt;
-      if(keys.has("w"))worldBattle.left=Math.max(42,worldBattle.left-paddleSpeed);
-      if(keys.has("s"))worldBattle.left=Math.min(h-42,worldBattle.left+paddleSpeed);
-      worldBattle.leftTilt=keys.has("a")?Math.PI/4:keys.has("d")?-Math.PI/4:0;
+      if(worldBattle.teleport){
+        const jump=worldBattle.teleport,progress=Math.min(1,(jump.elapsed+=dt)/jump.duration),eased=progress*progress*(3-2*progress);
+        worldBattle.left=jump.from+(jump.to-jump.from)*eased;
+        if(progress===1)worldBattle.teleport=null;
+      }else if(worldBattle.qteTimer<=0){
+        if(keys.has("w")||keys.has("arrowup"))worldBattle.left=Math.max(worldBattlePaddleHeight("left")/2,worldBattle.left-paddleSpeed);
+        if(keys.has("s")||keys.has("arrowdown"))worldBattle.left=Math.min(h-worldBattlePaddleHeight("left")/2,worldBattle.left+paddleSpeed);
+      }
+      if(keys.has("a")){worldBattle.leftTilt=Math.PI/4;worldBattle.tiltAssistAngle=worldBattle.leftTilt;worldBattle.tiltAssistTimer=.45}
+      else if(keys.has("d")){worldBattle.leftTilt=-Math.PI/4;worldBattle.tiltAssistAngle=worldBattle.leftTilt;worldBattle.tiltAssistTimer=.45}
+      else if(worldBattle.tiltAssistTimer>0){worldBattle.tiltAssistTimer=Math.max(0,worldBattle.tiltAssistTimer-dt/60);worldBattle.leftTilt=worldBattle.tiltAssistAngle}
+      else worldBattle.leftTilt=0;
       const target=worldBattle.ball.x>w*.48?worldBattle.ball.y:h/2;
       worldBattle.right+=Math.max(-4.2,Math.min(4.2,target-worldBattle.right))*slowDt;
-      worldBattle.right=Math.max(27,Math.min(h-27,worldBattle.right));
+      const rightHalf=worldBattlePaddleHeight("right")/2;
+      worldBattle.right=Math.max(rightHalf,Math.min(h-rightHalf,worldBattle.right));
       worldBattle.rightTilt=worldBattle.ball.y>worldBattle.right?Math.PI/8:-Math.PI/8;
       for(const side of ["left","right"])if(worldBattle.boosts[side]>0)worldBattle.boosts[side]=Math.max(0,worldBattle.boosts[side]-slowDt/60);
       for(const side of ["left","right"])if(worldBattle.powers[side]){worldBattle.powers[side].timer-=slowDt/60;if(worldBattle.powers[side].timer<=0)worldBattle.powers[side]=null}
@@ -1069,7 +1327,13 @@
         }
       }
       if(worldBattle.qteTimer>0){
-        worldBattle.qteTimer-=dt/60;if(worldBattle.qteTimer<=0)completeWorldQte(false);
+        if(worldBattle.boss&&worldBattle.bossStage===1){
+          const ball=worldBattle.ball;
+          ball.x+=ball.vx*dt*.08;ball.y+=ball.vy*dt*.08;
+          if(ball.y<7||ball.y>h-7){ball.y=Math.max(7,Math.min(h-7,ball.y));ball.vy*=-1}
+          if(ball.x>=w/2){ball.x=w/2;completeWorldBossStack()}
+        }
+        if(worldBattle.qteTimer>0){worldBattle.qteTimer-=dt/60;if(worldBattle.qteTimer<=0)completeWorldQte(false)}
       }else if(worldBattle.pointPause>0)worldBattle.pointPause-=dt;
       else{
         if(worldBattle.powerups&&!worldBattle.orb){
@@ -1083,10 +1347,10 @@
         for(const ball of balls){
           ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
           if(ball.y<7||ball.y>h-7){ball.y=Math.max(7,Math.min(h-7,ball.y));ball.vy*=-1}
-          if(ball.vx<0&&ball.x<=36&&Math.abs(ball.y-worldBattle.left)<(worldBattle.boosts.left>0?50:35)){
+          if(ball.vx<0&&ball.x<=36&&Math.abs(ball.y-worldBattle.left)<worldBattlePaddleHeight("left")/2+8){
             ball.x=36;hitWorldBattlePaddle(ball,"left");
           }
-          if(ball.vx>0&&ball.x>=w-36&&Math.abs(ball.y-worldBattle.right)<(worldBattle.boosts.right>0?50:35)){
+          if(ball.vx>0&&ball.x>=w-36&&Math.abs(ball.y-worldBattle.right)<worldBattlePaddleHeight("right")/2+8){
             ball.x=w-36;hitWorldBattlePaddle(ball,"right");
           }
           if(worldBattle.orb&&Math.hypot(ball.x-worldBattle.orb.x,ball.y-worldBattle.orb.y)<=27){
@@ -1094,14 +1358,9 @@
             worldBattle.orb=null;worldBattle.orbTimer=3+Math.random()*3;giveWorldBattlePower(recipient,type);
           }
           if(ball.x<0||ball.x>w){awardWorldBattlePoint(ball.x<0?"left":"right");break}
-          const speed=Math.hypot(ball.vx,ball.vy),limit=ball.type==="fast"||ball.type==="splitFast"?12:8.5;
+          const speed=Math.hypot(ball.vx,ball.vy),limit=worldBattle.boss?14:ball.type==="fast"||ball.type==="splitFast"?12:8.5;
           if(speed>limit){ball.vx*=limit/speed;ball.vy*=limit/speed}
           ball.vy=Math.max(-9,Math.min(9,ball.vy));
-        }
-        if(worldBattle.boss&&worldBattle.bossStage===2&&worldBattle.ball.vx>0&&worldBattle.ball.x>=worldBattle.bossTarget){
-          worldBattle.ball.x=worldBattle.bossTarget;startWorldQte(2);
-        }else if(worldBattle.boss&&worldBattle.bossStage===3&&worldBattle.ball.vx>0&&worldBattle.ball.x>=worldBattle.bossTarget){
-          worldBattle.ball.x=worldBattle.bossTarget;startWorldQte(3);
         }
       }
     }
@@ -1120,11 +1379,16 @@
       if(worldBattle.qteIndex===worldBattle.qteSequence.length)completeWorldQte(true);
       return;
     }
-    if(worldBattle.active&&["arrowup","arrowdown","w","s"].includes(key)){event.preventDefault();keys.add(key);return}
+    if(worldBattle.active&&["arrowup","arrowdown","w","s","a","d"].includes(key)){
+      event.preventDefault();
+      keys.add(key);
+      if(key==="a"||key==="d"){worldBattle.tiltAssistAngle=key==="a"?Math.PI/4:-Math.PI/4;worldBattle.tiltAssistTimer=.45}
+      return;
+    }
     if(worldBattle.active)return;
     if(moves[key]){event.preventDefault();moveWorld(...moves[key])}
     if(key==="e")interactWorld();
-    if(key===" ") {event.preventDefault();if(worldInterior?.dungeon)openWorldBattle(worldInterior.site,true);else openWorldBattle(null,false)}
+    if(key===" ") {event.preventDefault();if(worldInterior)$("#world-battle").click();else openWorldBattle(null,false)}
   });
   drawWorld();
   updateWorldStats();

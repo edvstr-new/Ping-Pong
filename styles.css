@@ -172,3 +172,27 @@ body.consent-required>.app-shell>.sidebar,body.consent-required>.app-shell>.main
 .world-power-toggle[aria-pressed=false]{border-color:#3a424e;background:#181d25;color:#8893a2}
 @media(max-width:880px){.world-layout{grid-template-columns:minmax(0,1fr) 190px}}
 @media(max-width:650px){.world-layout{grid-template-columns:1fr}.world-dialogue{font-size:11px}.world-action-row .button{min-height:48px}}
+.world-heading-actions{display:flex;align-items:center;gap:14px}
+.world-coins{flex-shrink:0}
+.world-activity-overlay,.world-beyond-overlay{position:fixed;inset:0;z-index:18;display:grid;place-items:center;padding:18px;background:#05070be8;backdrop-filter:blur(5px)}
+.world-activity-panel,.world-beyond-panel{width:min(560px,100%);padding:22px}
+.world-activity-panel h2,.world-beyond-panel h2{margin:12px 0 7px;font:600 22px var(--display)}
+.world-activity-panel p,.world-beyond-panel p{color:#aab4c2;font-size:12px;line-height:1.6}
+.world-activity-sequence{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:22px 0}
+.world-activity-sequence kbd{width:42px;height:46px;display:grid;place-items:center;border:1px solid #627080;border-radius:5px;background:#1a222e;color:#eff4fa;font:600 18px var(--mono)}
+.world-activity-sequence kbd.current{border-color:var(--violet);background:#342c4c;color:#fff}
+.world-activity-progress,.world-beyond-health{color:var(--green);font:10px var(--mono);letter-spacing:.08em;text-align:center}
+.world-beyond-panel{width:min(780px,100%);text-align:center}
+.world-beyond-panel .world-battle-heading{text-align:left}
+.world-beyond-panel canvas{display:block;width:100%;height:auto;margin:16px 0 10px;border:1px solid #533c68;background:#0b0914}
+.world-beyond-code{display:flex;justify-content:center;gap:7px;margin:18px 0}
+.world-beyond-code kbd{width:34px;height:34px;display:grid;place-items:center;border:1px solid #694d7f;border-radius:4px;background:#20172b;color:#e8d8ff;font:600 15px var(--mono)}
+.world-beyond-code kbd.current{background:#a681d0;color:#17101e}
+.world-beyond-health{color:#ff9b72}
+body.world-mode-active .sidebar{visibility:hidden;transform:translateX(-100%);transition:transform .2s ease,visibility .2s}
+body.world-mode-active .main-content{margin-left:0;max-width:none;padding-inline:clamp(16px,4vw,60px)}
+body.world-mode-active.world-nav-open .sidebar{visibility:visible;transform:translateX(0);pointer-events:auto}
+body.world-mode-active.world-nav-open .main-content{margin-left:230px}
+body.world-mode-active .world-layout{max-width:1450px}
+@media(max-width:880px){body.world-mode-active.world-nav-open .main-content{margin-left:66px}}
+@media(max-width:650px){.world-heading-actions{align-items:flex-end;gap:8px}body.world-mode-active .sidebar{transform:translateY(100%);visibility:hidden}body.world-mode-active.world-nav-open .sidebar{transform:translateY(0);visibility:visible}body.world-mode-active.world-nav-open .main-content{margin-left:0}.world-activity-panel,.world-beyond-panel{padding:14px}.world-beyond-code{gap:4px}.world-beyond-code kbd{width:28px;height:30px;font-size:12px}}
