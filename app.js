@@ -48,7 +48,7 @@
   });
 
   const lessons = [
-    {title:"Movement & controls",short:"Find your feet",body:"Move your paddle with W and S. In a local match, the second player uses the up and down arrow keys. Small adjustments are usually better than chasing the ball."},
+    {title:"Movement & controls",short:"Find your feet",body:"Use W and S only to move your paddle up and down. Press A to tilt it right (front edge up) or D to tilt it left (front edge down). In local matches, Player 2 uses the arrow keys the same way: up/down to move and left/right to tilt."},
     {title:"The perfect return",short:"Meet the ball",body:"A return is more than a save. The point where the ball hits your paddle changes its angle: hit near the center for a steady shot, or near an edge to send it wide."},
     {title:"Paddle tilt",short:"Shape the angle",body:"Moving your paddle tilts it by a full 45 degrees. Meet the ball while moving to add spin and shape a sharper return. The tilt is bold, so time your movement deliberately."},
     {title:"Powerups",short:"Change the rally",body:"Tap Space to trigger a power serve when the ability is ready. With powerups enabled, it temporarily widens your paddle—save it for a difficult return."},
@@ -78,76 +78,128 @@
   });
   renderLesson();
 
-  let problem = {type:"prediction",landing:50,target:50,guard:"top",answer:"bottom",choice:null,streak:0,solved:0,totalAccuracy:0};
-  function newProblem() {
-    const startX=34+Math.random()*30,startY=15+Math.random()*70,velocityX=5,velocityY=(Math.random()-.5)*8;
-    const time=(92-startX)*9/velocityX;
-    const foldedY=(((startY*5+velocityY*time)%1000)+1000)%1000;
-    problem.landing=(foldedY<=500?foldedY:1000-foldedY)/5;
-    problem.target=10+Math.random()*77;
-    problem.guard=Math.random()<.5?"top":"bottom";
-    problem.answer=problem.guard==="top"?"bottom":"top";
-    problem.choice=null;
-    const ball=$("#problem-ball");
-    ball.style.top=`${startY}%`;ball.style.left=`${startX}%`;
-    ball.style.setProperty("--trajectory-angle",`${Math.atan2(velocityY*500,velocityX*900)*180/Math.PI}deg`);
-    $("#prediction-range").value = 50;
-    $("#prediction-marker").style.top = "50%";
-    $("#timing-target").style.left=`${problem.target}%`;
-    $("#opponent-paddle").style.top=problem.guard==="top"?"15%":"67%";
-    $$(".strategy-option").forEach((option)=>option.classList.remove("selected"));
-    $("#problem-result").textContent = "";
-    $("#check-prediction").disabled = false;
-    if(problem.type==="strategy")$("#problem-prompt").textContent=`The opponent is guarding ${problem.guard}. Choose the side they left open.`;
+  let problem={type:"prediction",phase:"aim",x:55,y:36,vx:-.78,vy:.48,paddleY:50,last:0,qteSequence:[],qteIndex:0,qteTime:0,trackingHits:0,streak:0,solved:0,totalAccuracy:0};
+  const problemCourt=$("#problem-court"),problemBall=$("#problem-ball"),problemPaddle=$("#problem-player-paddle"),problemAction=$("#check-prediction");
+  function finishProblem(success,message){
+    if(problem.phase==="success"||problem.phase==="failed")return;
+    problem.phase=success?"success":"failed";
+    problem.solved++;problem.totalAccuracy+=success?100:0;
+    problem.streak=success?problem.streak+1:0;
+    $("#problem-streak").textContent=problem.streak;$("#problem-solved").textContent=problem.solved;
+    $("#problem-accuracy").innerHTML=`${Math.round(problem.totalAccuracy/problem.solved)}<small>%</small>`;
+    $("#problem-result").textContent=message;$("#problem-result").style.color=success?"var(--green)":"var(--orange)";
+    problemAction.disabled=false;problemAction.textContent="TRY AGAIN  ↗";
   }
-  function setProblemType(type) {
+  function resetProblem(){
+    problem.phase="aim";problem.x=55;problem.y=20+Math.random()*60;
+    problem.vx=-.7-Math.random()*.16;problem.vy=(Math.random()-.5)*1.25;
+    problem.paddleY=50;problem.last=0;problem.qteSequence=[];problem.qteIndex=0;problem.qteTime=0;problem.trackingHits=0;
+    problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
+    problemPaddle.style.top=`${problem.paddleY}%`;
+    $("#opponent-paddle").classList.add("hidden");
+    $("#problem-qte-prompt").classList.add("hidden");
+    $("#tracking-progress").textContent="TRACKED RETURNS: 0 / 3";
+    $("#problem-result").textContent="";problemAction.disabled=false;
+    problemAction.textContent=problem.type==="prediction"?"RELEASE THE BALL  ↗":problem.type==="timing"?"START QUICKTIME  ↗":"START TRACKING  ↗";
+    $("#problem-prompt").textContent=problem.type==="prediction"
+      ?"The ball is frozen. Drag your paddle into position, then release the ball. Once it moves, your paddle is locked."
+      :problem.type==="timing"?"Ready your fingers. You'll have to hit the complete random WASD sequence before time runs out."
+      :"Start the drill, then drag your paddle up and down to catch the ball as it bounces across the court.";
+  }
+  function newProblem(){resetProblem()}
+  function setProblemType(type){
     problem.type=type;
     const config={
-      prediction:["Read the bounce","The ball is frozen mid-flight. Follow its angle and predict where it will reach your paddle.","LOCK IN PREDICTION  ↗"],
-      timing:["Find your timing","The return window is brief. Lock in when the moving pulse crosses the target zone.","TIME YOUR RETURN  ↗"],
-      strategy:["Find the open court",`The opponent is guarding ${problem.guard}. Choose the side they left open.`,"CHOOSE YOUR SHOT  ↗"]
+      prediction:["Read the bounce","The ball is frozen mid-flight. Place your paddle, then see if your read saves the point."],
+      timing:["Quicktime training","React to a random combination of W, A, S, and D before the timer expires."],
+      strategy:["Track the ball","Drag your paddle with the ball as it bounces up and down. Land three returns to win."]
     }[type];
-    $("#problem-title").textContent=config[0];$("#problem-prompt").textContent=config[1];$("#check-prediction").textContent=config[2];
+    $("#problem-title").textContent=config[0];$("#problem-prompt").textContent=config[1];
     $("#prediction-controls").classList.toggle("hidden",type!=="prediction");
     $(".timing-challenge").classList.toggle("hidden",type!=="timing");
     $(".strategy-challenge").classList.toggle("hidden",type!=="strategy");
     $$(".problem-type").forEach((button)=>button.classList.toggle("active",button.dataset.problemType===type));
-    $("#problem-result").textContent="";$("#check-prediction").disabled=false;
+    newProblem();
   }
-  $$(".problem-type").forEach((button)=>button.addEventListener("click",()=>{problem.type=button.dataset.problemType;newProblem();setProblemType(button.dataset.problemType)}));
-  $("#prediction-range").addEventListener("input", (event) => $("#prediction-marker").style.top = `${event.target.value}%`);
-  $$(".strategy-option").forEach((button)=>button.addEventListener("click",()=>{
-    problem.choice=button.dataset.target;
-    $$(".strategy-option").forEach((option)=>option.classList.toggle("selected",option===button));
-  }));
-  $("#new-problem").addEventListener("click", newProblem);
-  $("#check-prediction").addEventListener("click", () => {
-    let difference,accuracy,success;
-    if(problem.type==="prediction"){
-      difference=Math.abs(Number($("#prediction-range").value)-problem.landing);
-      accuracy=Math.max(0,Math.round(100-difference*1.65));success=difference<10;
-    }else if(problem.type==="timing"){
-      const marker=$(".timing-marker").getBoundingClientRect(),track=$("#timing-track").getBoundingClientRect();
-      const markerPosition=((marker.left+marker.width/2-track.left)/track.width)*100;
-      difference=Math.abs(markerPosition-(problem.target+6.5));
-      accuracy=Math.max(0,Math.round(100-difference*4));success=difference<8;
-    }else{
-      success=problem.choice===problem.answer;difference=success?0:55;accuracy=success?100:10;
-    }
-    problem.solved++;
-    problem.totalAccuracy += accuracy;
-    if (success) problem.streak++;
-    else problem.streak = 0;
-    $("#problem-streak").textContent = problem.streak;
-    $("#problem-solved").textContent = problem.solved;
-    $("#problem-accuracy").innerHTML = `${Math.round(problem.totalAccuracy/problem.solved)}<small>%</small>`;
-    const feedback=problem.type==="prediction"?(success?"beautiful read!":"watch the angle off the wall."):problem.type==="timing"?(success?"perfect timing!":"wait for the pulse to enter the target."):success?"smart shot — you found the open side.":`the ${problem.answer} side was open.`;
-    $("#problem-result").textContent = `${accuracy}% accurate — ${feedback}`;
-    $("#problem-result").style.color = success ? "var(--green)" : "var(--orange)";
-    $("#check-prediction").disabled = true;
-    $("#prediction-marker").style.top = `${problem.landing}%`;
+  $$(".problem-type").forEach((button)=>button.addEventListener("click",()=>setProblemType(button.dataset.problemType)));
+  function setProblemPaddleFromPointer(event){
+    if(problem.phase!=="aim"&&!(problem.type==="strategy"&&problem.phase==="running"))return;
+    const bounds=problemCourt.getBoundingClientRect();
+    problem.paddleY=Math.max(9,Math.min(91,(event.clientY-bounds.top)/bounds.height*100));
+    problemPaddle.style.top=`${problem.paddleY}%`;
+  }
+  problemCourt.addEventListener("pointerdown",(event)=>{
+    if(event.target===problemCourt||event.target===problemBall||event.target===problemPaddle){problemCourt.setPointerCapture(event.pointerId);setProblemPaddleFromPointer(event);event.preventDefault()}
   });
-  newProblem();
+  problemCourt.addEventListener("pointermove",(event)=>{
+    if(problemCourt.hasPointerCapture(event.pointerId))setProblemPaddleFromPointer(event);
+  });
+  problemCourt.addEventListener("pointerup",(event)=>{
+    if(problemCourt.hasPointerCapture(event.pointerId))problemCourt.releasePointerCapture(event.pointerId);
+  });
+  function startQuicktime(){
+    const letters=["w","a","s","d"];
+    problem.qteSequence=Array.from({length:4+Math.floor(Math.random()*3)},()=>letters[Math.floor(Math.random()*letters.length)]);
+    problem.qteIndex=0;problem.qteTime=8;problem.phase="running";
+    $("#problem-qte-prompt").innerHTML=problem.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("");
+    $("#problem-qte-prompt").classList.remove("hidden");
+    $("#problem-prompt").textContent="Type the highlighted keys in order. Wrong keys reset your combo.";
+    problemAction.disabled=true;problemAction.textContent="TYPE THE COMBO";
+  }
+  function startProblem(){
+    if(problem.phase==="success"||problem.phase==="failed"){newProblem();return}
+    if(problem.type==="timing"){startQuicktime();return}
+    problem.phase="running";problem.last=0;
+    if(problem.type==="strategy"){
+      problem.x=82;problem.y=16+Math.random()*68;problem.vx=-.62;problem.vy=.62+(Math.random()*.28);
+      problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
+      $("#problem-prompt").textContent="Track the ball with your paddle. Each clean catch sends it back; miss once and the drill ends.";
+      $("#tracking-progress").textContent="TRACKED RETURNS: 0 / 3";
+    }else{
+      $("#problem-prompt").textContent="The ball is live. Your paddle is locked—see whether your frozen position saves the point.";
+    }
+    problemAction.disabled=true;problemAction.textContent=problem.type==="strategy"?"TRACK THE BALL":"BALL IN PLAY";
+  }
+  $("#new-problem").addEventListener("click",newProblem);
+  problemAction.addEventListener("click",startProblem);
+  function updateProblem(time){
+    if(!$("#page-problems").classList.contains("active")){problem.last=time;requestAnimationFrame(updateProblem);return}
+    if(problem.phase==="running"){
+      const dt=Math.min((time-problem.last)/16.67||1,2.4);problem.last=time;
+      if(problem.type==="timing"){
+        problem.qteTime-=dt/60;
+        if(problem.qteTime<=0)finishProblem(false,"Time's up—you missed the QTE. Start another and try the combo again.");
+      }else{
+        problem.x+=problem.vx*dt;problem.y+=problem.vy*dt;
+        if(problem.y<4){problem.y=4;problem.vy=Math.abs(problem.vy)}
+        if(problem.y>96){problem.y=96;problem.vy=-Math.abs(problem.vy)}
+        problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
+        if(problem.type==="prediction"&&problem.x<=12){
+          const caught=Math.abs(problem.y-problem.paddleY)<=11;
+          finishProblem(caught,caught?"Saved! Your paddle read was right.":"The ball got past your paddle. You lose this point.");
+        }else if(problem.type==="strategy"&&problem.vx<0&&problem.x<=12){
+          if(Math.abs(problem.y-problem.paddleY)<=11){
+            problem.trackingHits++;problem.vx=Math.abs(problem.vx);
+            $("#tracking-progress").textContent=`TRACKED RETURNS: ${problem.trackingHits} / 3`;
+            if(problem.trackingHits>=3)finishProblem(true,"Three clean returns! You kept your paddle on the bouncing ball.");
+          }else finishProblem(false,"You lost the ball. Keep your paddle moving with it and try again.");
+        }else if(problem.type==="strategy"&&problem.vx>0&&problem.x>=88)problem.vx=-Math.abs(problem.vx);
+      }
+    }else problem.last=time;
+    requestAnimationFrame(updateProblem);
+  }
+  requestAnimationFrame(updateProblem);
+  document.addEventListener("keydown",(event)=>{
+    if(!$("#page-problems").classList.contains("active")||problem.type!=="timing"||problem.phase!=="running")return;
+    const key=event.key.toLowerCase();
+    if(!["w","a","s","d"].includes(key))return;
+    event.preventDefault();
+    if(key===problem.qteSequence[problem.qteIndex])problem.qteIndex++;
+    else problem.qteIndex=key===problem.qteSequence[0]?1:0;
+    $$("#problem-qte-prompt kbd").forEach((letter,index)=>letter.classList.toggle("current",index===problem.qteIndex));
+    if(problem.qteIndex===problem.qteSequence.length)finishProblem(true,"Quick reactions! You nailed the whole combination.");
+  });
+  setProblemType("prediction");
 
   const canvas = $("#pong-canvas");
   const ctx = canvas.getContext("2d");
@@ -194,7 +246,6 @@
     const dt=Math.min((time-game.last)/16.67||1,2.4); game.last=time;
     if (game.running && $("#page-onevone").classList.contains("active")) {
       const speed=5.8*dt;
-      const previousLeft=game.left,previousRight=game.right;
       if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.paddleHeight/2,game.left-speed);
       if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.paddleHeight/2,game.left+speed);
       if (game.mode==="local") {
@@ -209,8 +260,8 @@
         const target=game.ballX<canvas.width*.55?game.ballY:canvas.height/2;
         game.left+=Math.max(-4.4,Math.min(4.4,target-game.left))*dt;
       }
-      game.tiltLeft=game.left===previousLeft?0:Math.sign(game.left-previousLeft)*Math.PI/4;
-      game.tiltRight=game.right===previousRight?0:Math.sign(game.right-previousRight)*Math.PI/4;
+      game.tiltLeft=keys.has("a")?-Math.PI/4:keys.has("d")?Math.PI/4:0;
+      game.tiltRight=game.mode==="local"?(keys.has("arrowleft")?Math.PI/4:keys.has("arrowright")?-Math.PI/4:0):0;
       if(game.boost>0){game.boost-=dt;game.paddleHeight=112}else game.paddleHeight=76;
       if(game.qteTimer>0){game.qteTimer-=dt;if(game.qteTimer<=0)$("#qte-prompt").classList.remove("active")}
       game.ballX+=game.vx*dt;game.ballY+=game.vy*dt;
@@ -237,12 +288,12 @@
     const isLocal=game.mode==="local",isArena=game.mode==="arena";
     $("#left-player-label").textContent=isArena?"AI 01":"YOU";$("#right-player-label").textContent=isArena?"AI 02":isLocal?"PLAYER 2":"CPU";
     $("#control-opponent").textContent=isArena?"AI vs AI":isLocal?"Local player":"AI";
-    $("#game-hint").textContent=isArena?"Watch two AIs go head-to-head":isLocal?"Player 2: arrow keys":"First to 7 wins the match";
+    $("#game-hint").textContent=isArena?"Watch two AIs go head-to-head":isLocal?"P2: arrows move and tilt":"First to 7 wins the match";
     resetMatch();
   }));
   document.addEventListener("keydown",(event)=>{
     const key=event.key.toLowerCase();
-    if(["arrowup","arrowdown"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
+    if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
     keys.add(key);
     if(key===" "&&$("#page-onevone").classList.contains("active")&&game.running&&game.powerups)game.boost=230;
     if(game.qteTimer>0&&$("#page-onevone").classList.contains("active")&&["w","a","s","d"].includes(key)){
