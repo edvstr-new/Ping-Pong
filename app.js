@@ -1105,7 +1105,7 @@
   $("#world-activity-overlay").addEventListener("click",(event)=>{if(event.target.id==="world-activity-overlay")closeWorldActivity()});
   document.addEventListener("keydown",handleWorldActivityKey);
   function openBeyondBoss(site){
-    openWorldBattle(site,true,null,true);
+    openWorldBattle(site,true);
   }
   function enterWorldStructure(site){
     worldInterior={site,dungeon:site.dungeon,playerX:4,playerY:6};
@@ -1449,6 +1449,13 @@
       ball.vx=(isPlayer?1:-1)*Math.abs(ball.vx)*1.045;
       ball.vy+=contact*.11+Math.sin(isPlayer?worldBattle.leftTilt:worldBattle.rightTilt)*.6;
     }
+    if(worldBattle.superBoss&&!isPlayer){
+      const speed=Math.hypot(ball.vx,ball.vy),launchSpeed=11.5+Math.random()*1.5;
+      ball.vx*=launchSpeed/speed;ball.vy*=launchSpeed/speed;
+      ball.devilShot=true;ball.devilWarpCount=0;
+    }else if(isPlayer){
+      delete ball.devilShot;delete ball.devilWarpCount;
+    }
     const power=worldBattle.powers[side];
     if(power){
       worldBattle.powers[side]=null;
@@ -1618,6 +1625,15 @@
             ball.vy=Math.max(-8,Math.min(8,ball.vy+Math.sign(offset)*.45));
             ball.warpEcho={x:fromX,y:fromY,timer:.28};ball.realityWarpCount=warpStage+1;
             updateWorldAiTarget(ball);
+          }
+          const devilWarpStage=ball.devilWarpCount||0;
+          const devilWarpThresholds=[.68,.38];
+          if(worldBattle.superBoss&&ball.devilShot&&ball.vx<0&&devilWarpStage<devilWarpThresholds.length&&ball.x<w*devilWarpThresholds[devilWarpStage]){
+            const fromX=ball.x,fromY=ball.y,offset=(Math.random()<.5?-1:1)*(24+Math.random()*24);
+            ball.x=Math.max(48,ball.x-18);
+            ball.y=Math.max(7,Math.min(h-7,ball.y+offset));
+            ball.vy=Math.max(-10,Math.min(10,ball.vy+Math.sign(offset)*1.1));
+            ball.warpEcho={x:fromX,y:fromY,timer:.28};ball.devilWarpCount=devilWarpStage+1;
           }
           if(ball.vx<0&&ball.x<=36&&Math.abs(ball.y-worldBattle.left)<worldBattlePaddleHeight("left")/2+8){
             ball.x=36;hitWorldBattlePaddle(ball,"left");
