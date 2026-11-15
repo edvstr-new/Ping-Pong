@@ -237,7 +237,7 @@
 
   const canvas = $("#pong-canvas");
   const ctx = canvas.getContext("2d");
-  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,balls:[],extraBalls:[],orb:null,orbSpawnTimer:4,leftHeight:76,rightHeight:76,paddleBoost:{left:0,right:0},powers:{left:null,right:null},lastHit:"left",scoreLeft:0,scoreRight:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,qteSide:null,playerReturns:{left:0,right:0},rallies:0};
+  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,paddleMoved:{left:false,right:false},balls:[],extraBalls:[],orb:null,orbSpawnTimer:4,leftHeight:76,rightHeight:76,paddleBoost:{left:0,right:0},powers:{left:null,right:null},lastHit:"left",scoreLeft:0,scoreRight:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteAutoTimer:0,qteSequence:[],qteIndex:0,qteSide:null,playerReturns:{left:0,right:0},rallies:0};
   const keys = new Set();
   function randomQteSequence(side="left"){
     const sequence=side==="right"?["arrowup","arrowleft","arrowdown","arrowright"]:["w","a","s","d"];
@@ -249,9 +249,9 @@
   }
   const qteKeyLabels={w:"W",a:"A",s:"S",d:"D",arrowup:"↑",arrowleft:"←",arrowdown:"↓",arrowright:"→"};
   function startPongQte(side){
-    game.qteSequence=randomQteSequence(side);game.qteIndex=0;game.qteSide=side;game.qteTimer=540;
+    game.qteSequence=randomQteSequence(side);game.qteIndex=0;game.qteSide=side;game.qteTimer=game.mode==="arena"?90:540;game.qteAutoTimer=8;
     keys.clear();
-    $("#qte-prompt span").textContent=side==="left"?"PLAYER 1 QUICK RETURN":"PLAYER 2 QUICK RETURN";
+    $("#qte-prompt span").textContent=game.mode==="arena"?`${side==="left"?"AI 01":"AI 02"} QUICKTIME COMBO`:side==="left"?"PLAYER 1 QUICK RETURN":"PLAYER 2 QUICK RETURN";
     $("#qte-key").innerHTML=game.qteSequence.map((key,index)=>`<kbd class="${index===0?"current":""}">${qteKeyLabels[key]}</kbd>`).join("");
     $("#qte-prompt").classList.add("active");
   }
@@ -261,7 +261,7 @@
     $("#qte-prompt").classList.remove("active");
     if(success&&side){
       game.paddleBoost[side]=Math.max(game.paddleBoost[side],2.5);
-      toast("Perfect combo — short paddle boost!");
+      if(game.mode!=="arena")toast("Perfect combo — short paddle boost!");
     }else if(side)toast("Combo expired — rally resumes.");
   }
   function resetBall(direction = Math.random() < .5 ? -1 : 1,lastHit=direction>0?"left":"right") {
@@ -355,7 +355,8 @@
       }
     }
     game.lastHit=side;game.rallies++;
-    if(game.mode!=="arena"&&(side==="left"||game.mode==="local")&&game.qteTimer<=0){
+    const canTriggerQte=game.mode==="arena"||game.mode==="ai"&&side==="left"||game.mode==="local"&&game.paddleMoved[side];
+    if(canTriggerQte&&game.qteTimer<=0){
       game.playerReturns[side]++;
       if(game.playerReturns[side]%2===0)startPongQte(side);
     }
@@ -436,10 +437,21 @@
   function gameFrame(time) {
     const dt=Math.min((time-game.last)/16.67||1,2.4); game.last=time;
     if (game.running && $("#page-onevone").classList.contains("active")) {
+      game.paddleMoved={left:false,right:false};
       if(game.qteTimer>0){
-        game.qteTimer-=dt;
-        if(game.qteTimer<=0)finishPongQte(false);
+        if(game.mode==="arena"){
+          game.qteAutoTimer-=dt;
+          if(game.qteAutoTimer<=0){
+            game.qteIndex++;
+            $$("#qte-key kbd").forEach((letter,index)=>letter.classList.toggle("current",index===game.qteIndex));
+            if(game.qteIndex===game.qteSequence.length)finishPongQte(true);
+            else game.qteAutoTimer=8;
+          }
+        }
+        if(game.qteTimer>0)game.qteTimer-=dt;
+        if(game.qteTimer<=0&&game.qteSide)finishPongQte(false);
       }else{
+        const previousLeft=game.left,previousRight=game.right;
         const speed=5.8*dt;
         if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.leftHeight/2,game.left-speed);
         if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.leftHeight/2,game.left+speed);
@@ -464,6 +476,8 @@
         }
         const rightHalf=game.rightHeight/2;
         game.right=Math.max(rightHalf,Math.min(canvas.height-rightHalf,game.right));
+        game.paddleMoved.left=game.left!==previousLeft;
+        game.paddleMoved.right=game.right!==previousRight;
         const allBalls=game.balls.concat(game.extraBalls);
         for(const ball of allBalls){
           ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
@@ -509,7 +523,7 @@
     const isLocal=game.mode==="local",isArena=game.mode==="arena";
     $("#left-player-label").textContent=isArena?"AI 01":"YOU";$("#right-player-label").textContent=isArena?"AI 02":isLocal?"PLAYER 2":"CPU";
     $("#control-opponent").textContent=isArena?"AI vs AI":isLocal?"Local player":"AI";
-    $("#game-hint").textContent=isArena?"Watch two AIs go head-to-head":isLocal?"QTE every 2nd return · P2 uses arrows":"QTE every 2nd return";
+    $("#game-hint").textContent=isArena?"AI QTE preview · combos auto-play":isLocal?"QTE on every 2nd moving return · P2 uses arrows":"QTE every 2nd return";
     resetMatch();
   }));
   document.addEventListener("keydown",(event)=>{
@@ -754,6 +768,13 @@
     duel:["Open Court","Rival Court","Boss Gate","Street Court"]
   };
   const worldColors={structure:"#93baff",job:"#ffcf77",cache:"#a4f6b1",npc:"#c5adff",duel:"#ff9b72"};
+  const worldCompanionRoles={
+    "Rally Scout":{title:"SCOUT",perk:"Points out a nearby structure when you talk."},
+    "Paddle Mechanic":{title:"MECHANIC",perk:"Gives your paddle a brief boost at match start."},
+    "Wandering Ace":{title:"ACE",perk:"Adds 5 tokens to a duel victory reward."},
+    "Court Drifter":{title:"COURIER",perk:"Adds 4 tokens to courier contract rewards."},
+    "Rookie Bot":{title:"DUNGEON GUIDE",perk:"Offers a tip about dungeon rooms."}
+  };
   const worldTypes=["structure","job","cache","npc","duel"];
   const dungeonKinds=["path","maze","riddle","treasure","rivals"];
   const roomActivities=["cache","riddle","training","qte","rivals"];
@@ -797,6 +818,37 @@
       .filter((site)=>site.distance<=1).sort((a,b)=>a.distance-b.distance)[0]||null;
   }
   function areaActivityKey(site){return`${site.id}:activity`}
+  function worldSiteById(id){
+    const match=/^(\d+):(-?\d+):(-?\d+):(\d+)$/.exec(id);
+    if(!match||Number(match[1])!==world.seed)return null;
+    const [, ,regionX,regionY]=match;
+    return worldSitesNear(Number(regionX)*regionSize+12,Number(regionY)*regionSize+12).find((site)=>site.id===id)||null;
+  }
+  function hasWorldCompanion(name){return world.recruits.some((id)=>worldSiteById(id)?.name===name)}
+  function updateWorldCrew(){
+    const list=$("#world-crew-list"),empty=$("#world-crew-empty");
+    const companions=world.recruits.map((id)=>({id,site:worldSiteById(id)})).filter(({site})=>site);
+    list.innerHTML=companions.map(({id,site})=>{
+      const role=worldCompanionRoles[site.name]||{title:"TRAVELER",perk:"A friendly face on the road."};
+      return `<article class="world-companion"><div class="world-companion-copy"><strong>${site.name}</strong><small>${role.title} · ${role.perk}</small></div><div class="world-companion-actions"><button class="text-button" data-companion-action="talk" data-companion-id="${id}">TALK</button><button class="text-button world-companion-remove" data-companion-action="remove" data-companion-id="${id}" aria-label="Remove ${site.name} from your crew">REMOVE</button></div></article>`;
+    }).join("");
+    empty.classList.toggle("hidden",companions.length>0);
+    $("#world-crew-count").textContent=`${companions.length}/4`;
+  }
+  function talkToWorldCompanion(site){
+    if(site.name==="Rally Scout"){
+      const target=worldSitesNear(world.x,world.y).filter((nearby)=>nearby.type==="structure")
+        .sort((a,b)=>Math.abs(a.x-world.x)+Math.abs(a.y-world.y)-Math.abs(b.x-world.x)-Math.abs(b.y-world.y))[0];
+      if(target){
+        const dx=target.x-world.x,dy=target.y-world.y;
+        const direction=`${dy<0?"north":dy>0?"south":""}${dx&&dy?"-":""}${dx<0?"west":dx>0?"east":""}`;
+        $("#world-message").textContent=`${site.name}: "There's a ${target.name} ${Math.abs(dx)+Math.abs(dy)} tiles ${direction || "nearby"}. I'll keep watch."`;
+      }else $("#world-message").textContent=`${site.name}: "No structures in sight. Let's explore a little farther."`;
+    }else if(site.name==="Paddle Mechanic")$("#world-message").textContent=`${site.name}: "I'll tune your paddle before each match. You'll get a short coverage boost."`;
+    else if(site.name==="Wandering Ace")$("#world-message").textContent=`${site.name}: "Win a duel with me on the crew and I'll add 5 tokens to the prize."`;
+    else if(site.name==="Court Drifter")$("#world-message").textContent=`${site.name}: "I'll help with courier runs. Finish one with me along and you'll earn 4 extra tokens."`;
+    else $("#world-message").textContent=`${site.name}: "Dungeon rooms have trials and clues. Clear the room activity before challenging its boss."`;
+  }
   function areaActivityComplete(site){return world.completedActivities.includes(areaActivityKey(site))}
   function guardKey(site,index){return`${site.id}:guard-${index}`}
   function completeWorldArea(site,message){
@@ -912,8 +964,22 @@
     $("#world-location").textContent=`${biomes[worldHash(sectorX,sectorY)%biomes.length]} · SECTOR ${sectorX}, ${sectorY}`;
     const job=world.activeJob;
     $("#world-job-status").textContent=job?`${job.name}: ${job.progress}/${job.goal} ${job.kind==="courier"?"steps":job.kind==="scavenger"?"caches":"duels won"} · REWARD ◈ ${job.reward}`:"No active contract. Find a job site or ask a local.";
+    updateWorldCrew();
     updateWorldQuests();
   }
+  $("#world-crew-list").addEventListener("click",(event)=>{
+    const button=event.target.closest("[data-companion-action]");
+    if(!button)return;
+    const id=button.dataset.companionId,site=worldSiteById(id);
+    if(!site)return;
+    if(button.dataset.companionAction==="talk"){
+      talkToWorldCompanion(site);
+      return;
+    }
+    world.recruits=world.recruits.filter((recruitId)=>recruitId!==id);
+    $("#world-message").textContent=`${site.name} left your travel crew.`;
+    saveWorld();updateWorldStats();
+  });
   function drawSite(c,site,screenX,screenY){
     const color=worldColors[site.type],x=screenX,y=screenY;
     c.save();c.shadowColor=color;c.shadowBlur=9;c.fillStyle=color;c.strokeStyle=color;
@@ -1018,9 +1084,10 @@
   }
   function finishWorldJob(){
     const job=world.activeJob;if(!job||job.progress<job.goal)return;
-    world.tokens+=job.reward;world.xp+=job.reward*2;world.completedJobs.push(job.id);world.activeJob=null;
-    $("#world-message").textContent=`Contract complete! You earned ${job.reward} tokens.`;
-    toast(`Contract complete · +${job.reward} tokens`);
+    const companionBonus=job.kind==="courier"&&hasWorldCompanion("Court Drifter")?4:0,reward=job.reward+companionBonus;
+    world.tokens+=reward;world.xp+=reward*2;world.completedJobs.push(job.id);world.activeJob=null;
+    $("#world-message").textContent=`Contract complete! You earned ${reward} tokens${companionBonus? " (including your companion's +4 bonus)":""}.`;
+    toast(`Contract complete · +${reward} tokens`);
     saveWorld();updateWorldStats();
   }
   function advanceWorldJob(kind){
@@ -1493,7 +1560,7 @@
     if(worldBattle.superBoss)won=won&&worldBattle.scoreLeft>=3&&worldBattle.scoreLeft>worldBattle.scoreRight;
     worldBattle.running=false;
     if(won){
-      world.wins++;const reward=worldBattle.superBoss?100:worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.superBoss?200:worldBattle.boss?60:30;
+      world.wins++;const reward=(worldBattle.superBoss?100:worldBattle.boss?30:12)+(hasWorldCompanion("Wandering Ace")?5:0);world.tokens+=reward;world.xp+=worldBattle.superBoss?200:worldBattle.boss?60:30;
       if(worldBattle.guardIndex&&      worldBattle.site&&!world.defeatedGuards.includes(guardKey(worldBattle.site,worldBattle.guardIndex)))world.defeatedGuards.push(guardKey(worldBattle.site,worldBattle.guardIndex));
       else if(worldBattle.superBoss){
         world.superBossDefeated=true;
@@ -1530,7 +1597,12 @@
     worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;worldBattle.running=true;
     $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";$("#world-battle-start").disabled=true;
     $("#world-battle-message").textContent=worldBattle.superBoss?"First to 3 points. Ordinary shots have a 0.01% miss chance; three consecutive QTE smashes raise it to 0.1% for the final strike.":worldBattle.boss?"Stack QTEs before the halfway line. The ball moves slowly while you enter each combo.":"First to 5 wins · QTEs trigger every other player return · A/D tilt lingers briefly.";
-    resetWorldBall();drawWorldBattle();
+    resetWorldBall();
+    if(hasWorldCompanion("Paddle Mechanic")){
+      worldBattle.boosts.left=8;
+      $("#world-battle-message").textContent+=" Your Mechanic tuned your paddle for an opening boost.";
+    }
+    drawWorldBattle();
   });
   $("#world-battle-power-toggle").addEventListener("click",function(){
     worldBattle.powerups=!worldBattle.powerups;this.textContent=`POWERUPS: ${worldBattle.powerups?"ON":"OFF"}`;this.setAttribute("aria-pressed",String(worldBattle.powerups));
