@@ -1475,6 +1475,7 @@
     resetWorldBall(missedSide==="left"?1:-1);
   }
   function finishWorldBattle(won){
+    if(worldBattle.superBoss)won=won&&worldBattle.scoreLeft>=3&&worldBattle.scoreLeft>worldBattle.scoreRight;
     worldBattle.running=false;
     if(won){
       world.wins++;const reward=worldBattle.superBoss?100:worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.superBoss?200:worldBattle.boss?60:30;
