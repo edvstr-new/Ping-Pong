@@ -237,25 +237,42 @@
 
   const canvas = $("#pong-canvas");
   const ctx = canvas.getContext("2d");
-  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,balls:[],extraBalls:[],orb:null,orbSpawnTimer:4,leftHeight:76,rightHeight:76,paddleBoost:{left:0,right:0},powers:{left:null,right:null},lastHit:"left",scoreLeft:0,scoreRight:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,rallies:0};
+  const game = {mode:"ai",running:false,left:250,right:250,tiltLeft:0,tiltRight:0,balls:[],extraBalls:[],orb:null,orbSpawnTimer:4,leftHeight:76,rightHeight:76,paddleBoost:{left:0,right:0},powers:{left:null,right:null},lastHit:"left",scoreLeft:0,scoreRight:0,last:0,pointsToWin:7,powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,qteSide:null,playerReturns:{left:0,right:0},rallies:0};
   const keys = new Set();
-  function randomQteSequence(){
-    const sequence=["w","a","s","d"];
+  function randomQteSequence(side="left"){
+    const sequence=side==="right"?["arrowup","arrowleft","arrowdown","arrowright"]:["w","a","s","d"];
     for(let index=sequence.length-1;index>0;index--){
       const swap=Math.floor(Math.random()*(index+1));
       [sequence[index],sequence[swap]]=[sequence[swap],sequence[index]];
     }
     return sequence;
   }
+  const qteKeyLabels={w:"W",a:"A",s:"S",d:"D",arrowup:"↑",arrowleft:"←",arrowdown:"↓",arrowright:"→"};
+  function startPongQte(side){
+    game.qteSequence=randomQteSequence(side);game.qteIndex=0;game.qteSide=side;game.qteTimer=540;
+    keys.clear();
+    $("#qte-prompt span").textContent=side==="left"?"PLAYER 1 QUICK RETURN":"PLAYER 2 QUICK RETURN";
+    $("#qte-key").innerHTML=game.qteSequence.map((key,index)=>`<kbd class="${index===0?"current":""}">${qteKeyLabels[key]}</kbd>`).join("");
+    $("#qte-prompt").classList.add("active");
+  }
+  function finishPongQte(success){
+    const side=game.qteSide;
+    game.qteTimer=0;game.qteSide=null;game.qteSequence=[];game.qteIndex=0;keys.clear();
+    $("#qte-prompt").classList.remove("active");
+    if(success&&side){
+      game.paddleBoost[side]=Math.max(game.paddleBoost[side],2.5);
+      toast("Perfect combo — short paddle boost!");
+    }else if(side)toast("Combo expired — rally resumes.");
+  }
   function resetBall(direction = Math.random() < .5 ? -1 : 1,lastHit=direction>0?"left":"right") {
     game.balls=[{x:canvas.width/2,y:canvas.height/2,vx:direction*(4.6+Math.random()*1.1),vy:(Math.random()-.5)*5.2,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0}];
     game.extraBalls=[];game.orb=null;game.orbSpawnTimer=1.5+Math.random()*2;
     game.powers={left:null,right:null};game.paddleBoost={left:0,right:0};game.leftHeight=76;game.rightHeight=76;
     game.lastHit=lastHit;
-    game.qteTimer=0;game.qteSequence=[];game.qteIndex=0;game.rallies=0;$("#qte-prompt").classList.remove("active");
+    game.qteTimer=0;game.qteSequence=[];game.qteIndex=0;game.qteSide=null;game.playerReturns={left:0,right:0};game.rallies=0;$("#qte-prompt").classList.remove("active");
   }
   function resetMatch() {
-    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.qteTimer=0;game.qteSequence=[];game.qteIndex=0; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();renderPowerStatus();
+    game.scoreLeft=0; game.scoreRight=0; game.left=250; game.right=250; game.running=false; game.qteTimer=0;game.qteSequence=[];game.qteIndex=0;game.qteSide=null; game.rallies=0; $("#qte-prompt").classList.remove("active"); resetBall();renderPowerStatus();
     $("#score-left").textContent="0"; $("#score-right").textContent="0"; $("#game-overlay").classList.remove("hidden"); $("#start-game").textContent="START MATCH  ↗"; drawPong();
   }
   const powerupTypes={
@@ -338,9 +355,9 @@
       }
     }
     game.lastHit=side;game.rallies++;
-    if(side==="left"&&game.mode!=="arena"&&game.qteTimer<=0&&game.rallies>=3&&Math.random()<.2){
-      game.qteSequence=randomQteSequence();game.qteIndex=0;game.qteTimer=180;
-      $("#qte-key").innerHTML=game.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("");$("#qte-prompt").classList.add("active");
+    if(game.mode!=="arena"&&(side==="left"||game.mode==="local")&&game.qteTimer<=0){
+      game.playerReturns[side]++;
+      if(game.playerReturns[side]%2===0)startPongQte(side);
     }
     return true;
   }
@@ -419,56 +436,61 @@
   function gameFrame(time) {
     const dt=Math.min((time-game.last)/16.67||1,2.4); game.last=time;
     if (game.running && $("#page-onevone").classList.contains("active")) {
-      const speed=5.8*dt;
-      if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.leftHeight/2,game.left-speed);
-      if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.leftHeight/2,game.left+speed);
-      if (game.mode==="local") {
-        if(keys.has("arrowup"))game.right=Math.max(game.rightHeight/2,game.right-speed);
-        if(keys.has("arrowdown"))game.right=Math.min(canvas.height-game.rightHeight/2,game.right+speed);
-      } else {
-        const aiSpeed=game.mode==="arena"?4.4:3.7;
-        const target=game.balls[0]?.x>canvas.width*.45?game.balls[0].y:canvas.height/2;
-        game.right+=Math.max(-aiSpeed,Math.min(aiSpeed,target-game.right))*dt;
-      }
-      if(game.mode==="arena"){
-        const target=game.balls[0]?.x<canvas.width*.55?game.balls[0].y:canvas.height/2;
-        game.left+=Math.max(-4.4,Math.min(4.4,target-game.left))*dt;
-      }
-      game.tiltLeft=keys.has("a")?Math.PI/4:keys.has("d")?-Math.PI/4:0;
-      game.tiltRight=game.mode==="local"?(keys.has("arrowleft")?Math.PI/4:keys.has("arrowright")?-Math.PI/4:0):0;
-      if(game.qteTimer>0){game.qteTimer-=dt;if(game.qteTimer<=0)$("#qte-prompt").classList.remove("active")}
-      updatePowerups(dt);
-      if(game.mode!=="arena"){
-        const leftHalf=game.leftHeight/2;
-        game.left=Math.max(leftHalf,Math.min(canvas.height-leftHalf,game.left));
-      }
-      const rightHalf=game.rightHeight/2;
-      game.right=Math.max(rightHalf,Math.min(canvas.height-rightHalf,game.right));
-      const allBalls=game.balls.concat(game.extraBalls);
-      for(const ball of allBalls){
-        ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
-        if(ball.y<7||ball.y>canvas.height-7){ball.y=Math.max(7,Math.min(canvas.height-7,ball.y));ball.vy*=-1}
-        const leftX=34,rightX=canvas.width-34;
-        if(ball.vx<0&&ball.x<=leftX&&Math.abs(ball.y-game.left)<game.leftHeight/2+8){
-          ball.x=leftX;
-          if(!hitPaddle(ball,"left")){
-            game.balls=game.balls.filter((current)=>current!==ball);
-            game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
-          }
-          else{ball.vy+=(keys.has("s")?-.28:keys.has("w")?.28:0);if(ball.type==="normal")ball.vx=Math.min(Math.abs(ball.vx),9)}
+      if(game.qteTimer>0){
+        game.qteTimer-=dt;
+        if(game.qteTimer<=0)finishPongQte(false);
+      }else{
+        const speed=5.8*dt;
+        if (game.mode!=="arena"&&keys.has("w")) game.left=Math.max(game.leftHeight/2,game.left-speed);
+        if (game.mode!=="arena"&&keys.has("s")) game.left=Math.min(canvas.height-game.leftHeight/2,game.left+speed);
+        if (game.mode==="local") {
+          if(keys.has("arrowup"))game.right=Math.max(game.rightHeight/2,game.right-speed);
+          if(keys.has("arrowdown"))game.right=Math.min(canvas.height-game.rightHeight/2,game.right+speed);
+        } else {
+          const aiSpeed=game.mode==="arena"?4.4:3.7;
+          const target=game.balls[0]?.x>canvas.width*.45?game.balls[0].y:canvas.height/2;
+          game.right+=Math.max(-aiSpeed,Math.min(aiSpeed,target-game.right))*dt;
         }
-        if(ball.vx>0&&ball.x>=rightX&&Math.abs(ball.y-game.right)<game.rightHeight/2+8){
-          ball.x=rightX;
-          if(!hitPaddle(ball,"right")){
-            game.balls=game.balls.filter((current)=>current!==ball);
-            game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
-          }
-          else if(ball.type==="normal")ball.vx=-Math.min(Math.abs(ball.vx),9);
+        if(game.mode==="arena"){
+          const target=game.balls[0]?.x<canvas.width*.55?game.balls[0].y:canvas.height/2;
+          game.left+=Math.max(-4.4,Math.min(4.4,target-game.left))*dt;
         }
-        if(ball.x<0||ball.x>canvas.width){finishPoint(ball.x<0?"left":"right");break}
-        const speed=Math.hypot(ball.vx,ball.vy),limit=ball.type==="fast"||ball.type==="splitFast"?15:9;
-        if(speed>limit){ball.vx*=limit/speed;ball.vy*=limit/speed}
-        ball.vy=Math.max(-10,Math.min(10,ball.vy));
+        game.tiltLeft=keys.has("a")?Math.PI/4:keys.has("d")?-Math.PI/4:0;
+        game.tiltRight=game.mode==="local"?(keys.has("arrowleft")?Math.PI/4:keys.has("arrowright")?-Math.PI/4:0):0;
+        updatePowerups(dt);
+        if(game.mode!=="arena"){
+          const leftHalf=game.leftHeight/2;
+          game.left=Math.max(leftHalf,Math.min(canvas.height-leftHalf,game.left));
+        }
+        const rightHalf=game.rightHeight/2;
+        game.right=Math.max(rightHalf,Math.min(canvas.height-rightHalf,game.right));
+        const allBalls=game.balls.concat(game.extraBalls);
+        for(const ball of allBalls){
+          ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+          if(ball.y<7||ball.y>canvas.height-7){ball.y=Math.max(7,Math.min(canvas.height-7,ball.y));ball.vy*=-1}
+          const leftX=34,rightX=canvas.width-34;
+          if(ball.vx<0&&ball.x<=leftX&&Math.abs(ball.y-game.left)<game.leftHeight/2+8){
+            ball.x=leftX;
+            if(!hitPaddle(ball,"left")){
+              game.balls=game.balls.filter((current)=>current!==ball);
+              game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
+            }
+            else{ball.vy+=(keys.has("s")?-.28:keys.has("w")?.28:0);if(ball.type==="normal")ball.vx=Math.min(Math.abs(ball.vx),9)}
+          }
+          if(ball.vx>0&&ball.x>=rightX&&Math.abs(ball.y-game.right)<game.rightHeight/2+8){
+            ball.x=rightX;
+            if(!hitPaddle(ball,"right")){
+              game.balls=game.balls.filter((current)=>current!==ball);
+              game.extraBalls=game.extraBalls.filter((current)=>current!==ball);
+            }
+            else if(ball.type==="normal")ball.vx=-Math.min(Math.abs(ball.vx),9);
+          }
+          if(game.qteTimer>0)break;
+          if(ball.x<0||ball.x>canvas.width){finishPoint(ball.x<0?"left":"right");break}
+          const speed=Math.hypot(ball.vx,ball.vy),limit=ball.type==="fast"||ball.type==="splitFast"?15:9;
+          if(speed>limit){ball.vx*=limit/speed;ball.vy*=limit/speed}
+          ball.vy=Math.max(-10,Math.min(10,ball.vy));
+        }
       }
     }
     drawPong();requestAnimationFrame(gameFrame);
@@ -487,19 +509,24 @@
     const isLocal=game.mode==="local",isArena=game.mode==="arena";
     $("#left-player-label").textContent=isArena?"AI 01":"YOU";$("#right-player-label").textContent=isArena?"AI 02":isLocal?"PLAYER 2":"CPU";
     $("#control-opponent").textContent=isArena?"AI vs AI":isLocal?"Local player":"AI";
-    $("#game-hint").textContent=isArena?"Watch two AIs go head-to-head":isLocal?"P2: arrows move and tilt":"First to 7 wins the match";
+    $("#game-hint").textContent=isArena?"Watch two AIs go head-to-head":isLocal?"QTE every 2nd return · P2 uses arrows":"QTE every 2nd return";
     resetMatch();
   }));
   document.addEventListener("keydown",(event)=>{
     const key=event.key.toLowerCase();
-    if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)&&$("#page-onevone").classList.contains("active"))event.preventDefault();
-    if($("#page-onevone").classList.contains("active"))keys.add(key);
-    if(game.qteTimer>0&&$("#page-onevone").classList.contains("active")&&["w","a","s","d"].includes(key)){
+    const oneVOneActive=$("#page-onevone").classList.contains("active");
+    if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(key)&&oneVOneActive)event.preventDefault();
+    if(game.qteTimer>0&&oneVOneActive){
+      const qteKeys=game.qteSide==="right"?["arrowup","arrowleft","arrowdown","arrowright"]:["w","a","s","d"];
+      if(!qteKeys.includes(key))return;
+      event.preventDefault();
       if(key===game.qteSequence[game.qteIndex])game.qteIndex++;
       else game.qteIndex=key===game.qteSequence[0]?1:0;
       $$("#qte-key kbd").forEach((letter,index)=>letter.classList.toggle("current",index===game.qteIndex));
-      if(game.qteIndex===game.qteSequence.length){game.qteTimer=0;game.paddleBoost.left=Math.max(game.paddleBoost.left,2.5);$("#qte-prompt").classList.remove("active");toast("Perfect combo — short paddle boost!")}
+      if(game.qteIndex===game.qteSequence.length)finishPongQte(true);
+      return;
     }
+    if(oneVOneActive)keys.add(key);
   });
   document.addEventListener("keyup",(event)=>keys.delete(event.key.toLowerCase()));
 
@@ -971,7 +998,7 @@
     saveWorld();updateWorldStats();
   }
   const keyGlyphs={ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",w:"W",a:"A",s:"S",d:"D"};
-  const superBossCode=["ArrowUp","ArrowUp","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
+  const superBossCode=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
   let activeActivity=null,superBossCodeIndex=0;
   function makeActivitySequence(site,kind){
     if(kind==="riddle")return["ArrowUp","ArrowRight","ArrowDown","ArrowLeft","ArrowUp"];
@@ -1439,10 +1466,11 @@
   function challengeSuperBoss(){
     superBossCodeIndex=0;
     openWorldBattle(null,true,null,true);
+    $("#world-battle-start").click();
   }
   $("#world-super-boss").addEventListener("click",challengeSuperBoss);
   function handleSuperBossCode(event){
-    if(!$("#page-world").classList.contains("active")||worldBattle.active||activeActivity||event.target.matches("input,textarea,select")){
+    if(!$("#page-world").classList.contains("active")||worldBattle.active||activeActivity||event.target.matches("input,textarea")){
       superBossCodeIndex=0;return;
     }
     const key=event.code.startsWith("Arrow")?event.code:event.key;
