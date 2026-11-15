@@ -88,6 +88,14 @@
 
   let problem={type:"prediction",phase:"aim",x:55,y:36,vx:-.78,vy:.48,paddleY:50,last:0,qteSequence:[],qteIndex:0,qteTime:0,trackingHits:0,streak:0,solved:0,totalAccuracy:0};
   const problemCourt=$("#problem-court"),problemBall=$("#problem-ball"),problemPaddle=$("#problem-player-paddle"),problemAction=$("#check-prediction");
+  function updateProblemDirection(){
+    const indicator=$("#problem-direction"),arrow=$("#problem-direction-arrow"),label=$("#problem-direction-label");
+    const vertical=problem.vy<-.08?"UP":problem.vy>.08?"DOWN":"LEVEL";
+    indicator.classList.toggle("active",problem.type==="prediction"&&problem.phase==="aim");
+    arrow.style.transform=`rotate(${Math.atan2(problem.vy,problem.vx)*180/Math.PI}deg)`;
+    label.textContent=`MOVING ${vertical}-LEFT`;
+    indicator.setAttribute("aria-label",`Ball moving ${vertical.toLowerCase()} and left`);
+  }
   function finishProblem(success,message){
     if(problem.phase==="success"||problem.phase==="failed")return;
     problem.phase=success?"success":"failed";
@@ -101,6 +109,7 @@
   function resetProblem(){
     problem.phase="aim";problem.x=55;problem.y=20+Math.random()*60;
     problem.vx=-.7-Math.random()*.16;problem.vy=(Math.random()-.5)*1.25;
+    updateProblemDirection();
     problem.paddleY=50;problem.last=0;problem.qteSequence=[];problem.qteIndex=0;problem.qteTime=0;problem.trackingHits=0;
     problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
     problemPaddle.style.top=`${problem.paddleY}%`;
@@ -158,6 +167,7 @@
     if(problem.phase==="success"||problem.phase==="failed"){newProblem();return}
     if(problem.type==="timing"){startQuicktime();return}
     problem.phase="running";problem.last=0;
+    updateProblemDirection();
     if(problem.type==="strategy"){
       problem.x=82;problem.y=16+Math.random()*68;problem.vx=-.62;problem.vy=.62+(Math.random()*.28);
       problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
