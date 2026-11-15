@@ -843,7 +843,7 @@
       battle.textContent=worldInterior.dungeon&&activity==="path"&&!areaActivityComplete(worldInterior.site)
         ?"FOLLOW THE PATH TO GOAL  ↗"
         :worldInterior.dungeon&&["maze","beyond"].includes(activity)
-        ?`CHALLENGE ${world.defeatedBosses.includes(worldInterior.site.id)?"AREA":"GATE / BOSS"}  ↗`
+        ?`CHALLENGE ${world.defeatedBosses.includes(worldInterior.site.id)?"AREA":"GATE BOSS"}  ↗`
         :worldInterior.dungeon&&areaActivityComplete(worldInterior.site)
           ?`CHALLENGE DUNGEON BOSS  ↗`
           :`START ${activityNames[activity]||dungeonNames[activity]||"AREA ACTIVITY"}  ↗`;
@@ -958,7 +958,7 @@
       c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.shadowBlur=18;c.beginPath();c.arc(396,202,18,0,Math.PI*2);c.fill();c.shadowBlur=0;
       c.fillStyle="#15151b";c.font="bold 9px monospace";c.fillText("BOSS",396,205);
     }else if(isMaze&&guardsDefeated<2){
-      c.fillStyle="#ffcf77";c.fillRect(365,178,70,42);c.fillStyle="#241a15";c.font="bold 8px monospace";c.fillText(`${2-guardsDefeated} GATE AI`,400,202);
+      c.fillStyle="#ffcf77";c.fillRect(365,178,70,42);c.fillStyle="#241a15";c.font="bold 8px monospace";c.fillText(`${2-guardsDefeated} BOSS`,400,202);
     }else if(!activityDone&&(!room.dungeon||!isMaze)){
       const activity=room.site.dungeonKind||room.site.roomActivity;
       c.shadowBlur=10;
@@ -1229,7 +1229,8 @@
   }
   function setWorldAiTarget(ball){
     if(ball.vx<=0)return;
-    const rate=Number.isFinite(ball.aiSaveRate)?ball.aiSaveRate:(worldBattle.superBoss ? .9999 : worldDifficultySettings[world.difficulty].saveRate);
+    let rate=Number.isFinite(ball.aiSaveRate)?ball.aiSaveRate:(worldBattle.superBoss ? .9999 : worldDifficultySettings[world.difficulty].saveRate);
+    if(worldBattle.guardIndex)rate=Math.min(.999,rate+.1);
     ball.aiSaves=Math.random()<rate;
     ball.aiTeleportCount=0;
     ball.realityWarpCount=0;
@@ -1497,10 +1498,10 @@
       else if(worldBattle.boss&&worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id)){
         world.defeatedBosses.push(worldBattle.site.id);completeWorldArea(worldBattle.site,"Dungeon boss defeated.");
       }
-      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.superBoss?"Pong Devil defeated":worldBattle.guardIndex?"guardian defeated":worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
+      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.superBoss?"Pong Devil defeated":worldBattle.guardIndex?"Boss defeated":worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
       toast(`Match won · +${reward} tokens`);advanceWorldJob("sparring");
       if(worldBattle.site&&!worldBattle.boss&&worldBattle.site.type==="structure")completeWorldArea(worldBattle.site,"Rival match won.");
-    }else $("#world-battle-message").textContent="RIVAL WINS. Regroup and challenge another court.";
+    }else $("#world-battle-message").textContent=worldBattle.guardIndex?"THE BOSS WINS. Regroup and challenge again.":"RIVAL WINS. Regroup and challenge another court.";
     $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;
     saveWorld();updateWorldStats();updateWorldActions();drawWorld();
   }
@@ -1508,7 +1509,7 @@
     worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;
     worldBattle.boss=boss;worldBattle.superBoss=superBoss;worldBattle.guardIndex=guardIndex;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;worldBattle.playerReturns=0;
     $("#world-hell-effects").classList.toggle("active",superBoss);
-    $("#world-battle-title").textContent=superBoss?"THE PONG DEVIL":boss?`${site.name.toUpperCase()} · ${guardIndex?"GATE AI":"BOSS"}`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
+    $("#world-battle-title").textContent=superBoss?"THE PONG DEVIL":boss?`${site.name.toUpperCase()} · BOSS`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
     $("#world-battle-message").textContent=superBoss?"The Pong Devil saves 99.99% of ordinary shots. Three QTE smashes move the ball to the center line; the final strike has a 0.1% miss chance. First to 3 points wins.":boss?"Stack QTEs before the halfway line to damage the boss. Each hit speeds up the ball and warps your paddle toward it.":"Move with W/S, tilt with A/D, and collect center-line powerups. Tilt lingers briefly after release; QTEs trigger every other player return.";
     $("#world-battle-start").textContent="START MATCH  ↗";$("#world-battle-start").disabled=false;
     $("#world-battle-overlay").classList.remove("hidden");$("#world-score-left").textContent="0";$("#world-score-right").textContent="0";
@@ -1567,7 +1568,10 @@
         const destination=Math.max(rightHalf,Math.min(h-rightHalf,target+decoyOffset));
         worldBattle.depthEcho={from:worldBattle.right,to:destination,timer:.5};
         worldBattle.right=destination;incoming.aiTeleportCount=teleportStage+1;
-      }else worldBattle.right+=Math.max(-6.5,Math.min(6.5,target-worldBattle.right))*slowDt;
+      }else{
+        const aiSpeed=worldBattle.guardIndex?8.5:6.5;
+        worldBattle.right+=Math.max(-aiSpeed,Math.min(aiSpeed,target-worldBattle.right))*slowDt;
+      }
       worldBattle.right=Math.max(rightHalf,Math.min(h-rightHalf,worldBattle.right));
       worldBattle.rightTilt=worldBattle.ball.y>worldBattle.right?Math.PI/8:-Math.PI/8;
       for(const side of ["left","right"])if(worldBattle.boosts[side]>0)worldBattle.boosts[side]=Math.max(0,worldBattle.boosts[side]-slowDt/60);
