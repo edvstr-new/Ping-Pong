@@ -174,7 +174,7 @@ body.consent-required>.app-shell>.sidebar,body.consent-required>.app-shell>.main
 .world-power-toggle[aria-pressed=false]{border-color:#3a424e;background:#181d25;color:#8893a2}
 @media(max-width:880px){.world-layout{grid-template-columns:minmax(0,1fr) 190px}}
 @media(max-width:650px){.world-layout{grid-template-columns:1fr}.world-dialogue{font-size:11px}.world-action-row .button{min-height:48px}}
-.world-heading-actions{display:flex;align-items:center;gap:14px}
+.world-heading-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:14px}
 .world-coins{flex-shrink:0}
 .world-activity-overlay{position:fixed;inset:0;z-index:18;display:grid;place-items:center;padding:18px;background:#05070be8;backdrop-filter:blur(5px)}
 .world-activity-panel{width:min(560px,100%);padding:22px}

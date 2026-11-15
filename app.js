@@ -1436,18 +1436,23 @@
     requestAnimationFrame(worldBattleFrame);
   }
   requestAnimationFrame(worldBattleFrame);
+  function challengeSuperBoss(){
+    superBossCodeIndex=0;
+    openWorldBattle(null,true,null,true);
+  }
+  $("#world-super-boss").addEventListener("click",challengeSuperBoss);
   function handleSuperBossCode(event){
     if(!$("#page-world").classList.contains("active")||worldBattle.active||activeActivity||event.target.matches("input,textarea,select")){
       superBossCodeIndex=0;return;
     }
-    if(!superBossCode.includes(event.key)){superBossCodeIndex=0;return}
-    superBossCodeIndex=event.key===superBossCode[superBossCodeIndex]
+    const key=event.code.startsWith("Arrow")?event.code:event.key;
+    if(!superBossCode.includes(key)){superBossCodeIndex=0;return}
+    superBossCodeIndex=key===superBossCode[superBossCodeIndex]
       ?superBossCodeIndex+1
-      :event.key===superBossCode[0]?1:0;
+      :key===superBossCode[0]?1:0;
     if(superBossCodeIndex>0){event.preventDefault();event.stopImmediatePropagation()}
     if(superBossCodeIndex===superBossCode.length){
-      superBossCodeIndex=0;
-      openWorldBattle(null,true,null,true);
+      challengeSuperBoss();
     }
   }
   document.addEventListener("keydown",handleSuperBossCode);
