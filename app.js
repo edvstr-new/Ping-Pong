@@ -866,6 +866,11 @@
     $("#world-quests-toggle").setAttribute("aria-expanded",String(expanded));
     $("#world-quests-toggle").textContent=expanded?"HIDE QUESTS":"SHOW QUESTS";
   });
+  $("#world-quests-open").addEventListener("click",()=>{
+    const panel=$("#world-quests-panel");
+    panel.scrollIntoView({behavior:"smooth",block:"center"});
+    if($("#world-quests-toggle").getAttribute("aria-expanded")!=="true")$("#world-quests-toggle").click();
+  });
   $("#world-god-hint").addEventListener("click",()=>{
     const expanded=$("#world-god-hint").getAttribute("aria-expanded")!=="true";
     $("#world-god-hint-copy").classList.toggle("hidden",!expanded);
