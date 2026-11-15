@@ -20,4 +20,4 @@ Evolution and World progress use different local-storage keys and file formats. 
 
 ## Ad placements
 
-The first visit requires accepting before entering the arcade. Acceptance is saved in this browser and reveals reserved static display slots above and below the match court. This preview does not load AdSense or serve ads. Connect configured AdSense display units before deployment; no video, interstitial, or gameplay-overlay ad formats are included. This preference dialog is not a certified consent-management platform.
+The first visit requires accepting before entering the arcade. Acceptance is saved in this browser and reveals reserved static display slots above and below the match court. The AdSense loader is installed, but these placeholders are not configured AdSense display units, so ads will not render until display units are added. No video, interstitial, or gameplay-overlay ad formats are included. This preference dialog is not a certified consent-management platform.
