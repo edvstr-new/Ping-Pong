@@ -1633,7 +1633,6 @@
     openWorldBattle(null,true,null,true);
     $("#world-battle-start").click();
   }
-  $("#world-super-boss").addEventListener("click",challengeSuperBoss);
   function handleSuperBossCode(event){
     if(!$("#page-world").classList.contains("active")||worldBattle.active||activeActivity||event.target.matches("input,textarea")){
       superBossCodeIndex=0;return;
