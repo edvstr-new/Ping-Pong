@@ -1493,6 +1493,7 @@
   function openWorldBattle(site,boss=false,guardIndex=null,superBoss=false){
     worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;
     worldBattle.boss=boss;worldBattle.superBoss=superBoss;worldBattle.guardIndex=guardIndex;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;worldBattle.playerReturns=0;
+    $("#world-hell-effects").classList.toggle("active",superBoss);
     $("#world-battle-title").textContent=superBoss?"THE PONG DEVIL":boss?`${site.name.toUpperCase()} · ${guardIndex?"GATE AI":"BOSS"}`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
     $("#world-battle-message").textContent=superBoss?"The Pong Devil saves 99.99% of ordinary shots. Three QTE smashes move the ball to the center line; the final strike has a 0.1% miss chance. First to 3 points wins.":boss?"Stack QTEs before the halfway line to damage the boss. Each hit speeds up the ball and warps your paddle toward it.":"Move with W/S, tilt with A/D, and collect center-line powerups. Tilt lingers briefly after release; QTEs trigger every other player return.";
     $("#world-battle-start").textContent="START MATCH  ↗";$("#world-battle-start").disabled=false;
