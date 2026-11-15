@@ -723,17 +723,23 @@
     hard:{label:"Hard",saveRate:.9},
     impossible:{label:"Impossible",saveRate:.99}
   };
+  let worldSaveNeedsMigration=false;
   const world=(()=>{
-    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false,difficulty:"medium",superBossDefeated:false};
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false,difficulty:"medium",superBossDefeated:false,superBossVictoryScore:0};
     try{
       const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
-      if(saved&&saved.format==="pong-world-save"&&saved.version===1)return{...defaults,...saved,
+      if(saved&&saved.format==="pong-world-save"&&saved.version===1){
+        const victoryScore=Number.isInteger(saved.superBossVictoryScore)&&saved.superBossVictoryScore>=3?saved.superBossVictoryScore:0;
+        worldSaveNeedsMigration=Boolean(saved.superBossDefeated&&victoryScore===0);
+        return{...defaults,...saved,
         recruits:Array.isArray(saved.recruits)?saved.recruits:[],openedLoot:Array.isArray(saved.openedLoot)?saved.openedLoot:[],
         inspected:Array.isArray(saved.inspected)?saved.inspected:[],talkedTo:Array.isArray(saved.talkedTo)?saved.talkedTo:[],
         completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],
         defeatedGuards:Array.isArray(saved.defeatedGuards)?saved.defeatedGuards:[],completedActivities:Array.isArray(saved.completedActivities)?saved.completedActivities:[],
         activityProgress:saved.activityProgress&&typeof saved.activityProgress==="object"?saved.activityProgress:{},inventory:Array.isArray(saved.inventory)?saved.inventory:[],
-        difficulty:Object.hasOwn(worldDifficultySettings,saved.difficulty)?saved.difficulty:"medium",superBossDefeated:Boolean(saved.superBossDefeated)};
+        difficulty:Object.hasOwn(worldDifficultySettings,saved.difficulty)?saved.difficulty:"medium",
+        superBossVictoryScore:victoryScore,superBossDefeated:Boolean(saved.superBossDefeated&&victoryScore>=3)};
+      }
     }catch(error){console.error("Could not load Pong World save.",error)}
     return defaults;
   })();
@@ -849,6 +855,7 @@
   function saveWorld(){
     localStorage.setItem(WORLD_KEY,JSON.stringify(world));
   }
+  if(worldSaveNeedsMigration)saveWorld();
   function updateWorldDifficulty(){
     const setting=worldDifficultySettings[world.difficulty]||worldDifficultySettings.medium;
     $("#world-difficulty").value=world.difficulty;
@@ -1482,6 +1489,7 @@
       if(worldBattle.guardIndex&&      worldBattle.site&&!world.defeatedGuards.includes(guardKey(worldBattle.site,worldBattle.guardIndex)))world.defeatedGuards.push(guardKey(worldBattle.site,worldBattle.guardIndex));
       else if(worldBattle.superBoss){
         world.superBossDefeated=true;
+        world.superBossVictoryScore=worldBattle.scoreLeft;
         if(worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id)){
           world.defeatedBosses.push(worldBattle.site.id);completeWorldArea(worldBattle.site,"The Pong Devil is defeated.");
         }
