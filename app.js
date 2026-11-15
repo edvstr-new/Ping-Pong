@@ -86,22 +86,24 @@
   });
   renderLesson();
 
-  let problem={type:"prediction",phase:"aim",x:55,y:36,vx:-.78,vy:.48,paddleY:50,last:0,qteSequence:[],qteIndex:0,qteTime:0,trackingHits:0,streak:0,solved:0,totalAccuracy:0};
+  let problem={type:"prediction",phase:"aim",x:55,y:36,vx:-.78,vy:.48,paddleY:50,last:0,qteSequence:[],qteIndex:0,qteTime:0,trackingHits:0,streak:0,bestStreak:0,solved:0,totalAccuracy:0};
   const problemCourt=$("#problem-court"),problemBall=$("#problem-ball"),problemPaddle=$("#problem-player-paddle"),problemAction=$("#check-prediction");
   function updateProblemDirection(){
     const indicator=$("#problem-direction"),arrow=$("#problem-direction-arrow"),label=$("#problem-direction-label");
-    const vertical=problem.vy<-.08?"UP":problem.vy>.08?"DOWN":"LEVEL";
+    const angle=Math.atan2(problem.vy,problem.vx),degrees=Math.round(Math.atan2(Math.abs(problem.vy),Math.abs(problem.vx))*180/Math.PI);
+    const vertical=degrees<=1?"LEVEL":problem.vy<0?"UP":"DOWN";
     indicator.classList.toggle("active",problem.type==="prediction"&&problem.phase==="aim");
-    arrow.style.transform=`rotate(${Math.atan2(problem.vy,problem.vx)*180/Math.PI}deg)`;
-    label.textContent=`MOVING ${vertical}-LEFT`;
-    indicator.setAttribute("aria-label",`Ball moving ${vertical.toLowerCase()} and left`);
+    arrow.style.transform=`rotate(${angle*180/Math.PI}deg)`;
+    label.textContent=vertical==="LEVEL"?`MOVING LEFT · ${degrees}°`:`MOVING ${vertical}-LEFT · ${degrees}°`;
+    indicator.setAttribute("aria-label",`Ball moving ${vertical.toLowerCase()} and left at ${degrees} degrees from horizontal`);
   }
   function finishProblem(success,message){
     if(problem.phase==="success"||problem.phase==="failed")return;
     problem.phase=success?"success":"failed";
     problem.solved++;problem.totalAccuracy+=success?100:0;
     problem.streak=success?problem.streak+1:0;
-    $("#problem-streak").textContent=problem.streak;$("#problem-solved").textContent=problem.solved;
+    problem.bestStreak=Math.max(problem.bestStreak,problem.streak);
+    $("#problem-streak").textContent=problem.bestStreak;$("#problem-solved").textContent=problem.solved;
     $("#problem-accuracy").innerHTML=`${Math.round(problem.totalAccuracy/problem.solved)}<small>%</small>`;
     $("#problem-result").textContent=message;$("#problem-result").style.color=success?"var(--green)":"var(--orange)";
     problemAction.disabled=false;problemAction.textContent="TRY AGAIN  ↗";
@@ -530,6 +532,7 @@
     const level=1+Math.floor(evolution.xp/100),progress=Math.floor(evolution.xp%100);
     $("#evo-level").textContent=`LEVEL ${level} · ${level<3?"NOVICE":level<6?"COMPETITOR":"ACE"}`;
     $("#evo-xp-label").textContent=`${progress} / 100 XP`;$("#evo-xp-bar").style.width=`${progress}%`;
+    updateEvolutionPurchaseAvailability();
     saveEvolution();
   }
   function finishEvolutionPoint(ball){
@@ -598,6 +601,20 @@
   }
   function saveEvolution(){
     if(evolution) localStorage.setItem(EVOLUTION_KEY,JSON.stringify(evolution));
+  }
+  function updateEvolutionPurchaseAvailability(){
+    if(!evolution)return;
+    for(const button of $$("#upgrade-list [data-upgrade]")){
+      const item=upgradeDefinitions.find((entry)=>entry.id===button.dataset.upgrade);
+      if(!item)continue;
+      const level=evolution.upgrades[item.id]||0;
+      button.disabled=evolution.cash<item.base*(level+1)||level>=item.max;
+    }
+    for(const button of $$("#incentive-list [data-incentive]")){
+      const item=incentiveDefinitions.find((entry)=>entry.id===button.dataset.incentive);
+      if(!item)continue;
+      button.disabled=evolution.cash<item.price||evolution.incentives.includes(item.id);
+    }
   }
   function renderEvolution(){
     if(!evolution)return;
