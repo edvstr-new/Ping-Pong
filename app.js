@@ -33,14 +33,28 @@
   }
   const pages = ["home", "tutorial", "problems", "onevone", "evolution", "world"];
   const pageTitles = {home:"OVERVIEW",tutorial:"TUTORIAL",problems:"PONG PROBLEMS",onevone:"PONG 1V1",evolution:"PONG EVOLUTION",world:"PONG WORLD"};
+  function isSidebarVisible(){
+    return document.body.classList.contains("world-mode-active")
+      ?document.body.classList.contains("world-nav-open")
+      :!document.body.classList.contains("sidebar-collapsed");
+  }
+  function setSidebarVisible(visible){
+    if(document.body.classList.contains("world-mode-active")){
+      document.body.classList.toggle("world-nav-open",visible);
+    }else document.body.classList.toggle("sidebar-collapsed",!visible);
+    $("#sidebar-toggle").setAttribute("aria-expanded",String(visible));
+    $("#sidebar-toggle").setAttribute("aria-label",visible?"Hide arcade navigation":"Show arcade navigation");
+    const worldMenu=$("#world-mode-menu");
+    worldMenu.setAttribute("aria-expanded",String(visible&&document.body.classList.contains("world-mode-active")));
+    worldMenu.textContent=`${visible?"HIDE":"SHOW"} GAMEMODES`;
+  }
   const setPage = (name) => {
     if (!pages.includes(name)) return;
     $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
     $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.page === name));
     document.body.classList.toggle("world-mode-active",name==="world");
-    document.body.classList.remove("world-nav-open");
-    $("#world-mode-menu").setAttribute("aria-expanded","false");
-    $("#world-mode-menu").textContent="SHOW GAMEMODES";
+    document.body.classList.remove("world-nav-open","sidebar-collapsed");
+    setSidebarVisible(name!=="world");
     $("#current-location").textContent = pageTitles[name];
     if (name === "onevone") drawPong();
     if (name === "world") drawWorld();
@@ -50,10 +64,8 @@
     const target = event.target.closest("[data-page]");
     if (target) { event.preventDefault(); setPage(target.dataset.page); }
   });
-  $("#world-mode-menu").addEventListener("click",function(){
-    const open=document.body.classList.toggle("world-nav-open");
-    this.setAttribute("aria-expanded",String(open));this.textContent=`${open?"HIDE":"SHOW"} GAMEMODES`;
-  });
+  $("#sidebar-toggle").addEventListener("click",()=>setSidebarVisible(!isSidebarVisible()));
+  $("#world-mode-menu").addEventListener("click",()=>setSidebarVisible(!isSidebarVisible()));
 
   const lessons = [
     {title:"Movement & controls",short:"Find your feet",body:"Use W and S only to move your paddle up and down. Press A to tilt it right (front edge up) or D to tilt it left (front edge down). In local matches, Player 2 uses the arrow keys the same way: up/down to move and left/right to tilt."},
@@ -676,8 +688,14 @@
   }catch(error){console.error("Could not load Pong Evolution save.",error);}
   drawEvolution();
 
+  const worldDifficultySettings={
+    easy:{label:"Easy",saveRate:.7},
+    medium:{label:"Medium",saveRate:.8},
+    hard:{label:"Hard",saveRate:.9},
+    impossible:{label:"Impossible",saveRate:.99}
+  };
   const world=(()=>{
-    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false};
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false,difficulty:"medium",superBossDefeated:false};
     try{
       const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
       if(saved&&saved.format==="pong-world-save"&&saved.version===1)return{...defaults,...saved,
@@ -685,7 +703,8 @@
         inspected:Array.isArray(saved.inspected)?saved.inspected:[],talkedTo:Array.isArray(saved.talkedTo)?saved.talkedTo:[],
         completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],
         defeatedGuards:Array.isArray(saved.defeatedGuards)?saved.defeatedGuards:[],completedActivities:Array.isArray(saved.completedActivities)?saved.completedActivities:[],
-        activityProgress:saved.activityProgress&&typeof saved.activityProgress==="object"?saved.activityProgress:{},inventory:Array.isArray(saved.inventory)?saved.inventory:[]};
+        activityProgress:saved.activityProgress&&typeof saved.activityProgress==="object"?saved.activityProgress:{},inventory:Array.isArray(saved.inventory)?saved.inventory:[],
+        difficulty:Object.hasOwn(worldDifficultySettings,saved.difficulty)?saved.difficulty:"medium",superBossDefeated:Boolean(saved.superBossDefeated)};
     }catch(error){console.error("Could not load Pong World save.",error)}
     return defaults;
   })();
@@ -801,6 +820,18 @@
   function saveWorld(){
     localStorage.setItem(WORLD_KEY,JSON.stringify(world));
   }
+  function updateWorldDifficulty(){
+    const setting=worldDifficultySettings[world.difficulty]||worldDifficultySettings.medium;
+    $("#world-difficulty").value=world.difficulty;
+    $("#world-difficulty-copy").textContent=`Rivals save about ${Math.round(setting.saveRate*100)}% of shots. This applies to every match in this World save.`;
+  }
+  $("#world-difficulty").addEventListener("change",()=>{
+    if(!Object.hasOwn(worldDifficultySettings,$("#world-difficulty").value))return;
+    world.difficulty=$("#world-difficulty").value;
+    saveWorld();updateWorldDifficulty();
+    toast(`${worldDifficultySettings[world.difficulty].label} difficulty saved for this World.`);
+  });
+  updateWorldDifficulty();
   function updateWorldStats(){
     $("#world-tokens").textContent=world.tokens;
     $("#world-recruits").textContent=world.recruits.length;
@@ -938,8 +969,8 @@
     saveWorld();updateWorldStats();
   }
   const keyGlyphs={ArrowUp:"↑",ArrowDown:"↓",ArrowLeft:"←",ArrowRight:"→",w:"W",a:"A",s:"S",d:"D"};
-  const beyondCode=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
-  let activeActivity=null,beyondAnimation=0,beyondFrame=0;
+  const superBossCode=["ArrowUp","ArrowUp","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
+  let activeActivity=null,superBossCodeIndex=0;
   function makeActivitySequence(site,kind){
     if(kind==="riddle")return["ArrowUp","ArrowRight","ArrowDown","ArrowLeft","ArrowUp"];
     if(kind==="qte")return Array.from({length:6},(_,index)=>["ArrowUp","ArrowRight","ArrowDown","ArrowLeft"][(worldHash(site.x,site.y,710+index)%4)]);
@@ -981,7 +1012,6 @@
     if(message)$("#world-message").textContent=message;
   }
   function handleWorldActivityKey(event){
-    if(activeActivity?.beyond){if(handleBeyondKey(event)){event.preventDefault();event.stopImmediatePropagation()}return}
     if(!activeActivity||$("#world-activity-overlay").classList.contains("hidden"))return;
     event.preventDefault();event.stopImmediatePropagation();
     const key=event.key.length===1?event.key.toLowerCase():event.key;
@@ -1003,47 +1033,9 @@
   $("#world-activity-close").addEventListener("click",()=>closeWorldActivity());
   $("#world-activity-overlay").addEventListener("click",(event)=>{if(event.target.id==="world-activity-overlay")closeWorldActivity()});
   document.addEventListener("keydown",handleWorldActivityKey);
-  function drawBeyondBoss(){
-    if(!activeActivity?.beyond)return;
-    const canvas=$("#world-beyond-canvas"),context=canvas.getContext("2d"),t=(performance.now()-beyondAnimation)/1000,w=canvas.width,h=canvas.height;
-    context.clearRect(0,0,w,h);context.fillStyle="#090712";context.fillRect(0,0,w,h);
-    context.strokeStyle="#342844";context.lineWidth=1;
-    for(let i=0;i<8;i++){const y=65+i*42,shift=Math.sin(t*.7+i)*44;context.beginPath();context.moveTo(0,y+shift);context.lineTo(w,y-shift);context.stroke()}
-    context.setLineDash([5,8]);context.beginPath();context.moveTo(w/2,0);context.lineTo(w/2,h);context.stroke();context.setLineDash([]);
-    const x=w/2+Math.sin(t*1.4)*200,z=Math.sin(t*.8)*.5+.5,y=h/2+Math.cos(t*1.9)*105-z*22,size=16+z*28;
-    context.save();context.translate(x,y);context.rotate(t*.8);
-    context.fillStyle="#ff7caa";context.shadowColor="#d981ff";context.shadowBlur=28;
-    context.beginPath();context.ellipse(0,0,size*1.2,size*.65,Math.sin(t)*.5,0,Math.PI*2);context.fill();
-    context.fillStyle="#f6e8ff";context.beginPath();context.arc(-size*.3,-size*.12,Math.max(3,size*.12),0,Math.PI*2);context.arc(size*.3,-size*.12,Math.max(3,size*.12),0,Math.PI*2);context.fill();
-    context.restore();context.shadowBlur=0;context.fillStyle="#d6b7ef";context.font="11px monospace";context.textAlign="center";context.fillText("X / Y / DEPTH DO NOT AGREE",w/2,h-20);
-    beyondFrame=requestAnimationFrame(drawBeyondBoss);
-  }
-  function renderBeyondCode(index){
-    $("#world-beyond-code").innerHTML=beyondCode.map((key,i)=>`<kbd class="${i===index?"current":""}">${keyGlyphs[key]}</kbd>`).join("");
-  }
   function openBeyondBoss(site){
-    activeActivity={site,kind:"beyond",beyond:true,index:0,health:3};
-    $("#world-beyond-overlay").classList.remove("hidden");$("#world-beyond-message").textContent="The boss moves in three dimensions. You only get this projection. Enter the Konami arrow code to land a hit.";
-    $("#world-beyond-health").textContent="BOSS HEALTH · 3";renderBeyondCode(0);
-    beyondAnimation=performance.now();cancelAnimationFrame(beyondFrame);beyondFrame=requestAnimationFrame(drawBeyondBoss);
+    openWorldBattle(site,true,null,true);
   }
-  function handleBeyondKey(event){
-    if(!activeActivity?.beyond)return false;
-    if(event.key!==beyondCode[activeActivity.index]){activeActivity.index=0;renderBeyondCode(0);$("#world-beyond-message").textContent="Wrong direction. The projection shifts; start the code again.";return true}
-    activeActivity.index++;renderBeyondCode(activeActivity.index);
-    if(activeActivity.index===beyondCode.length){
-      activeActivity.index=0;activeActivity.health--;renderBeyondCode(0);
-      $("#world-beyond-health").textContent=`BOSS HEALTH · ${activeActivity.health}`;
-      $("#world-beyond-message").textContent=activeActivity.health?`Direct hit! The boss slips into another dimension. ${activeActivity.health} more hit${activeActivity.health===1?"":"s"} needed.`:"The impossible projection collapses. You won.";
-      if(activeActivity.health<=0){
-        const site=activeActivity.site;activeActivity=null;cancelAnimationFrame(beyondFrame);$("#world-beyond-overlay").classList.add("hidden");
-        world.defeatedBosses.push(site.id);completeWorldArea(site,"The Beyond boss is defeated.");
-      }
-    }
-    return true;
-  }
-  $("#world-beyond-close").addEventListener("click",()=>{activeActivity=null;cancelAnimationFrame(beyondFrame);$("#world-beyond-overlay").classList.add("hidden")});
-  $("#world-beyond-overlay").addEventListener("click",(event)=>{if(event.target.id==="world-beyond-overlay")$("#world-beyond-close").click()});
   function enterWorldStructure(site){
     worldInterior={site,dungeon:site.dungeon,playerX:4,playerY:6};
     toast(site.dungeon?`${dungeonNames[site.dungeonKind]||"Dungeon"} · activity inside`:"Area discovered · explore its trial");
@@ -1151,11 +1143,27 @@
     else openWorldBattle(null,false);
   });
 
-  const worldBattle={running:false,active:false,left:180,right:180,leftTilt:0,rightTilt:0,tiltAssistTimer:0,tiltAssistAngle:0,teleport:null,ball:{x:400,y:180,vx:5,vy:2.5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0},extraBalls:[],scoreLeft:0,scoreRight:0,last:0,pointPause:0,lastHit:"left",rallies:0,playerReturns:0,orb:null,orbTimer:2,powers:{left:null,right:null},boosts:{left:0,right:0},powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,boss:false,bossStage:0,bossStack:0,bossHealth:3,site:null,guardIndex:null};
+  const worldBattle={running:false,active:false,left:180,right:180,leftTilt:0,rightTilt:0,tiltAssistTimer:0,tiltAssistAngle:0,teleport:null,depthEcho:null,depthPhase:0,ball:{x:400,y:180,vx:5,vy:2.5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0},extraBalls:[],scoreLeft:0,scoreRight:0,last:0,pointPause:0,lastHit:"left",rallies:0,playerReturns:0,orb:null,orbTimer:2,powers:{left:null,right:null},boosts:{left:0,right:0},powerups:true,qteTimer:0,qteSequence:[],qteIndex:0,boss:false,superBoss:false,bossStage:0,bossStack:0,bossHealth:3,site:null,guardIndex:null};
   function allWorldBattleBalls(){return [worldBattle.ball,...worldBattle.extraBalls]}
   function worldBattlePaddleHeight(side){
     if(worldBattle.boosts[side]>0)return 84;
     return side==="left"?72:54;
+  }
+  function predictWorldAiImpact(ball){
+    const height=worldBattleCanvas.height,low=7,span=height-14;
+    const frames=(worldBattleCanvas.width-36-ball.x)/ball.vx;
+    let phase=(ball.y-low+ball.vy*frames)%(span*2);
+    if(phase<0)phase+=span*2;
+    return low+(phase<=span?phase:span*2-phase);
+  }
+  function setWorldAiTarget(ball){
+    if(ball.vx<=0)return;
+    const rate=worldBattle.superBoss ? .9999 : worldDifficultySettings[world.difficulty].saveRate;
+    ball.aiSaves=Math.random()<rate;
+    const impact=predictWorldAiImpact(ball),half=worldBattlePaddleHeight("right")/2;
+    const top=half,bottom=worldBattleCanvas.height-half;
+    ball.aiTarget=ball.aiSaves?impact:(Math.abs(impact-top)>Math.abs(impact-bottom)?top:bottom);
+    ball.aiTeleported=false;
   }
   function drawWorldBattle(){
     const c=worldBattleCtx;if(!c)return;
@@ -1168,6 +1176,18 @@
       c.strokeStyle=`rgba(125,242,227,${(1-progress)*.55})`;c.lineWidth=4;c.beginPath();c.moveTo(30,worldBattle.teleport.from);c.lineTo(30,worldBattle.teleport.to);c.stroke();
     }
     c.fillStyle="#7df2e3";c.shadowColor="#7df2e3";c.shadowBlur=11;c.save();c.translate(30,worldBattle.left);c.rotate(worldBattle.leftTilt);c.fillRect(-5,-leftHeight/2,10,leftHeight);c.restore();
+    if(worldBattle.superBoss){
+      c.save();c.shadowBlur=0;c.fillStyle="#d981ff";
+      for(let layer=1;layer<=3;layer++){
+        const progress=worldBattle.depthEcho?1-worldBattle.depthEcho.timer/.4:1;
+        const y=worldBattle.depthEcho
+          ?worldBattle.depthEcho.from+(worldBattle.depthEcho.to-worldBattle.depthEcho.from)*Math.min(1,progress*layer/3)
+          :worldBattle.right+Math.sin(worldBattle.depthPhase*2+layer)*layer*9;
+        c.globalAlpha=worldBattle.depthEcho?Math.max(0,.35-worldBattle.depthEcho.timer*.7):.12/layer;
+        c.fillRect(w-30-layer*8-5,y-rightHeight/2,10,rightHeight);
+      }
+      c.restore();
+    }
     c.fillStyle="#ff9b72";c.shadowColor="#ff9b72";c.save();c.translate(w-30,worldBattle.right);c.rotate(worldBattle.rightTilt);c.fillRect(-5,-rightHeight/2,10,rightHeight);c.restore();
     for(const ball of allWorldBattleBalls()){
       c.fillStyle=ball.type==="fast"||ball.type==="splitFast"?"#ffe3a3":ball.type==="slow"||ball.type==="splitSlow"?"#b9d8ff":"#edfff9";
@@ -1185,8 +1205,9 @@
   function resetWorldBall(direction=Math.random()<.5?-1:1){
     const speed=4.4+Math.random()*1.2;
     worldBattle.ball={x:worldBattleCanvas.width/2,y:worldBattleCanvas.height/2,vx:direction*speed,vy:(Math.random()-.5)*5,type:"normal",powerOwner:null,powerTimer:0,baseSpeed:0};
+    if(direction>0)setWorldAiTarget(worldBattle.ball);
     worldBattle.extraBalls=[];worldBattle.orb=null;worldBattle.orbTimer=2+Math.random()*2;
-    worldBattle.powers={left:null,right:null};worldBattle.boosts={left:0,right:0};worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.rallies=0;worldBattle.playerReturns=0;worldBattle.teleport=null;worldBattle.tiltAssistTimer=0;worldBattle.leftTilt=0;worldBattle.rightTilt=0;worldBattle.lastHit=direction>0?"left":"right";
+    worldBattle.powers={left:null,right:null};worldBattle.boosts={left:0,right:0};worldBattle.qteTimer=0;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.rallies=0;worldBattle.playerReturns=0;worldBattle.teleport=null;worldBattle.depthEcho=null;worldBattle.tiltAssistTimer=0;worldBattle.leftTilt=0;worldBattle.rightTilt=0;worldBattle.lastHit=direction>0?"left":"right";
     worldBattle.pointPause=35;$("#world-battle-qte").classList.add("hidden");
   }
   function startWorldQte(){
@@ -1268,10 +1289,12 @@
     }
     worldBattle.lastHit=side;worldBattle.rallies++;
     if(isPlayer){
+      setWorldAiTarget(ball);
+      for(const extra of worldBattle.extraBalls)if(extra.vx>0&&extra.aiTarget===undefined)setWorldAiTarget(extra);
       worldBattle.playerReturns++;
       if(worldBattle.boss){worldBattle.bossStage=1;worldBattle.bossStack=0;startWorldQte()}
       else if(worldBattle.playerReturns%2===0)startWorldQte();
-    }
+    }else ball.aiTarget=null;
   }
   function awardWorldBattlePoint(missedSide){
     if(missedSide==="left")worldBattle.scoreRight++;else worldBattle.scoreLeft++;
@@ -1284,23 +1307,29 @@
   function finishWorldBattle(won){
     worldBattle.running=false;
     if(won){
-      world.wins++;const reward=worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.boss?60:30;
+      world.wins++;const reward=worldBattle.superBoss?100:worldBattle.boss?30:12;world.tokens+=reward;world.xp+=worldBattle.superBoss?200:worldBattle.boss?60:30;
       if(worldBattle.guardIndex&&worldBattle.site&&!world.defeatedGuards.includes(guardKey(worldBattle.site,worldBattle.guardIndex)))world.defeatedGuards.push(guardKey(worldBattle.site,worldBattle.guardIndex));
+      else if(worldBattle.superBoss){
+        world.superBossDefeated=true;
+        if(worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id)){
+          world.defeatedBosses.push(worldBattle.site.id);completeWorldArea(worldBattle.site,"The impossible Pong boss is defeated.");
+        }
+      }
       else if(worldBattle.boss&&worldBattle.site&&!world.defeatedBosses.includes(worldBattle.site.id)){
         world.defeatedBosses.push(worldBattle.site.id);completeWorldArea(worldBattle.site,"Dungeon boss defeated.");
       }
-      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.guardIndex?"guardian defeated":worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
+      $("#world-battle-message").textContent=`VICTORY! +${reward} tokens · ${worldBattle.superBoss?"impossible super boss defeated":worldBattle.guardIndex?"guardian defeated":worldBattle.boss?"dungeon boss defeated":"rival defeated"}.`;
       toast(`Match won · +${reward} tokens`);advanceWorldJob("sparring");
       if(worldBattle.site&&!worldBattle.boss&&worldBattle.site.type==="structure")completeWorldArea(worldBattle.site,"Rival match won.");
     }else $("#world-battle-message").textContent="RIVAL WINS. Regroup and challenge another court.";
     $("#world-battle-start").textContent=won?"PLAY AGAIN":"REMATCH";$("#world-battle-start").disabled=false;
     saveWorld();updateWorldStats();updateWorldActions();drawWorld();
   }
-  function openWorldBattle(site,boss=false,guardIndex=null){
+  function openWorldBattle(site,boss=false,guardIndex=null,superBoss=false){
     worldBattle.active=true;worldBattle.running=false;worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;
-    worldBattle.boss=boss;worldBattle.guardIndex=guardIndex;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;worldBattle.playerReturns=0;
-    $("#world-battle-title").textContent=boss?`${site.name.toUpperCase()} · ${guardIndex?"GATE AI":"BOSS"}`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
-    $("#world-battle-message").textContent=boss?"Stack QTEs before the halfway line to damage the boss. Each hit speeds up the ball and warps your paddle toward it.":"Move with W/S, tilt with A/D, and collect center-line powerups. Tilt lingers briefly after release; QTEs trigger every other player return.";
+    worldBattle.boss=boss;worldBattle.superBoss=superBoss;worldBattle.guardIndex=guardIndex;worldBattle.bossStage=0;worldBattle.bossStack=0;worldBattle.bossHealth=3;worldBattle.site=site||null;worldBattle.rallies=0;worldBattle.playerReturns=0;
+    $("#world-battle-title").textContent=superBoss?"THE IMPOSSIBLE SUPER BOSS":boss?`${site.name.toUpperCase()} · ${guardIndex?"GATE AI":"BOSS"}`:site?`${site.name.toUpperCase()} · 1V1`:"OPEN 1V1 CHALLENGE";
+    $("#world-battle-message").textContent=superBoss?"The boss moves through depth and phases in this 2D court. It saves 99.99% of shots; stack QTEs to damage it.":boss?"Stack QTEs before the halfway line to damage the boss. Each hit speeds up the ball and warps your paddle toward it.":"Move with W/S, tilt with A/D, and collect center-line powerups. Tilt lingers briefly after release; QTEs trigger every other player return.";
     $("#world-battle-start").textContent="START MATCH  ↗";$("#world-battle-start").disabled=false;
     $("#world-battle-overlay").classList.remove("hidden");$("#world-score-left").textContent="0";$("#world-score-right").textContent="0";
     resetWorldBall();drawWorldBattle();
@@ -1312,7 +1341,7 @@
     if(alreadyDefeated){worldBattle.active=false;$("#world-battle-overlay").classList.add("hidden");drawWorld();return}
     worldBattle.scoreLeft=0;worldBattle.scoreRight=0;worldBattle.left=180;worldBattle.right=180;worldBattle.running=true;
     $("#world-score-left").textContent="0";$("#world-score-right").textContent="0";$("#world-battle-start").disabled=true;
-    $("#world-battle-message").textContent=worldBattle.boss?"Stack QTEs before the halfway line. The ball moves slowly while you enter each combo.":"First to 5 wins · QTEs trigger every other player return · A/D tilt lingers briefly.";
+    $("#world-battle-message").textContent=worldBattle.superBoss?"The boss can phase through depth. Stack QTEs before the halfway line to damage it.":worldBattle.boss?"Stack QTEs before the halfway line. The ball moves slowly while you enter each combo.":"First to 5 wins · QTEs trigger every other player return · A/D tilt lingers briefly.";
     resetWorldBall();drawWorldBattle();
   });
   $("#world-battle-power-toggle").addEventListener("click",function(){
@@ -1326,6 +1355,11 @@
     const dt=Math.min((time-worldBattle.last)/16.67||1,2.4);worldBattle.last=time;
     if(worldBattle.running&&$("#page-world").classList.contains("active")){
       const h=worldBattleCanvas.height,w=worldBattleCanvas.width,slowDt=worldBattle.qteTimer>0?dt*.08:dt,paddleSpeed=5.2*slowDt;
+      worldBattle.depthPhase+=dt/60;
+      if(worldBattle.depthEcho){
+        worldBattle.depthEcho.timer-=dt/60;
+        if(worldBattle.depthEcho.timer<=0)worldBattle.depthEcho=null;
+      }
       if(worldBattle.teleport){
         const jump=worldBattle.teleport,progress=Math.min(1,(jump.elapsed+=dt)/jump.duration),eased=progress*progress*(3-2*progress);
         worldBattle.left=jump.from+(jump.to-jump.from)*eased;
@@ -1338,8 +1372,13 @@
       else if(keys.has("d")){worldBattle.leftTilt=-Math.PI/4;worldBattle.tiltAssistAngle=worldBattle.leftTilt;worldBattle.tiltAssistTimer=.45}
       else if(worldBattle.tiltAssistTimer>0){worldBattle.tiltAssistTimer=Math.max(0,worldBattle.tiltAssistTimer-dt/60);worldBattle.leftTilt=worldBattle.tiltAssistAngle}
       else worldBattle.leftTilt=0;
-      const target=worldBattle.ball.x>w*.48?worldBattle.ball.y:h/2;
-      worldBattle.right+=Math.max(-4.2,Math.min(4.2,target-worldBattle.right))*slowDt;
+      const incoming=allWorldBattleBalls().filter((ball)=>ball.vx>0).sort((a,b)=>a.x-b.x)[0];
+      if(incoming&&incoming.aiTarget===undefined)setWorldAiTarget(incoming);
+      const target=incoming&&Number.isFinite(incoming.aiTarget)?incoming.aiTarget:h/2;
+      if(worldBattle.superBoss&&incoming?.aiSaves&&incoming.x>w*.58&&!incoming.aiTeleported){
+        worldBattle.depthEcho={from:worldBattle.right,to:target,timer:.4};
+        worldBattle.right=target;incoming.aiTeleported=true;
+      }else worldBattle.right+=Math.max(-6.5,Math.min(6.5,target-worldBattle.right))*slowDt;
       const rightHalf=worldBattlePaddleHeight("right")/2;
       worldBattle.right=Math.max(rightHalf,Math.min(h-rightHalf,worldBattle.right));
       worldBattle.rightTilt=worldBattle.ball.y>worldBattle.right?Math.PI/8:-Math.PI/8;
@@ -1395,6 +1434,21 @@
     requestAnimationFrame(worldBattleFrame);
   }
   requestAnimationFrame(worldBattleFrame);
+  function handleSuperBossCode(event){
+    if(!$("#page-world").classList.contains("active")||worldBattle.active||activeActivity||event.target.matches("input,textarea,select")){
+      superBossCodeIndex=0;return;
+    }
+    if(!superBossCode.includes(event.key)){superBossCodeIndex=0;return}
+    superBossCodeIndex=event.key===superBossCode[superBossCodeIndex]
+      ?superBossCodeIndex+1
+      :event.key===superBossCode[0]?1:0;
+    if(superBossCodeIndex>0){event.preventDefault();event.stopImmediatePropagation()}
+    if(superBossCodeIndex===superBossCode.length){
+      superBossCodeIndex=0;
+      openWorldBattle(null,true,null,true);
+    }
+  }
+  document.addEventListener("keydown",handleSuperBossCode);
   document.addEventListener("keydown",(event)=>{
     if(!$("#page-world").classList.contains("active")||event.target.matches("input,textarea,select"))return;
     const key=event.key.toLowerCase(),moves={w:[0,-1],arrowup:[0,-1],s:[0,1],arrowdown:[0,1],a:[-1,0],arrowleft:[-1,0],d:[1,0],arrowright:[1,0]};
