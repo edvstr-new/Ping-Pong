@@ -42,8 +42,10 @@
     if(document.body.classList.contains("world-mode-active")){
       document.body.classList.toggle("world-nav-open",visible);
     }else document.body.classList.toggle("sidebar-collapsed",!visible);
+    $(".sidebar").hidden=!visible;
     $("#sidebar-toggle").setAttribute("aria-expanded",String(visible));
     $("#sidebar-toggle").setAttribute("aria-label",visible?"Hide arcade navigation":"Show arcade navigation");
+    $("#sidebar-toggle").textContent=visible?"HIDE MENU":"SHOW MENU";
     const worldMenu=$("#world-mode-menu");
     worldMenu.setAttribute("aria-expanded",String(visible&&document.body.classList.contains("world-mode-active")));
     worldMenu.textContent=`${visible?"HIDE":"SHOW"} GAMEMODES`;

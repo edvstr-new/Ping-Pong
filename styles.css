@@ -7,6 +7,7 @@ button,select,input{font:inherit}
 button{color:inherit}
 .app-shell{min-height:100vh}
 .sidebar{position:fixed;inset:0 auto 0 0;width:230px;background:#0c1018;border-right:1px solid #1d2430;padding:27px 15px 20px;display:flex;flex-direction:column;z-index:5}
+.sidebar[hidden]{display:none}
 .brand{display:flex;align-items:center;gap:12px;padding:0 12px 44px;color:var(--text);text-decoration:none;font:700 19px var(--display);letter-spacing:.065em}
 .brand small{display:block;color:#697284;font:500 9px var(--mono);letter-spacing:.18em;margin-top:3px}
 .brand-period{color:var(--cyan)}
