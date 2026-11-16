@@ -59,6 +59,7 @@
     setSidebarVisible(name!=="world");
     $("#current-location").textContent = pageTitles[name];
     if (name === "onevone") drawPong();
+    if (name === "problems") updateProblemDirection();
     if (name === "world") drawWorld();
     window.scrollTo({top:0,behavior:"smooth"});
   };
@@ -104,7 +105,9 @@
   const problemCourt=$("#problem-court"),problemBall=$("#problem-ball"),problemPaddle=$("#problem-player-paddle"),problemAction=$("#check-prediction");
   function updateProblemDirection(){
     const indicator=$("#problem-direction"),arrow=$("#problem-direction-arrow"),label=$("#problem-direction-label");
-    const angle=Math.atan2(problem.vy,problem.vx),degrees=Math.round(Math.atan2(Math.abs(problem.vy),Math.abs(problem.vx))*180/Math.PI);
+    const bounds=problemCourt.getBoundingClientRect(),courtWidth=bounds.width||1,courtHeight=bounds.height||260;
+    const pixelVx=problem.vx*courtWidth,pixelVy=problem.vy*courtHeight;
+    const angle=Math.atan2(pixelVy,pixelVx),degrees=Math.round(Math.atan2(Math.abs(pixelVy),Math.abs(pixelVx))*180/Math.PI);
     const vertical=degrees<=1?"LEVEL":problem.vy<0?"UP":"DOWN";
     indicator.classList.toggle("active",problem.type==="prediction"&&problem.phase==="aim");
     arrow.style.transform=`rotate(${angle*180/Math.PI}deg)`;
@@ -737,9 +740,19 @@
     hard:{label:"Hard",saveRate:.9},
     impossible:{label:"Impossible",saveRate:.99}
   };
+  const worldPotionTypes={
+    saving:{name:"POTION OF SAVING",description:"Lowers the enemy's chance to save the ball by 10 percentage points."},
+    paddleSpeed:{name:"PADDLE SPEED POTION",description:"Raises your maximum paddle movement speed by 50%."},
+    opponentSlow:{name:"PADDLE SLOWNESS POTION",description:"Rival paddles move 30% slower in World matches."},
+    intelligence:{name:"POTION OF INTELLIGENCE",description:"World QTEs and puzzles need one fewer key."}
+  };
+  const worldPotionDurations=[{minutes:1,price:10},{minutes:5,price:35},{minutes:10,price:60}];
+  const worldPotionProducts=Object.fromEntries(Object.entries(worldPotionTypes).flatMap(([type,potion])=>
+    worldPotionDurations.map(({minutes,price})=>[`${type}-${minutes}`,{...potion,type,minutes,price}])
+  ));
   let worldSaveNeedsMigration=false;
   const world=(()=>{
-    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],activeJob:null,tutorialDone:false,difficulty:"medium",superBossDefeated:false,superBossVictoryScore:0};
+    const defaults={format:"pong-world-save",version:1,seed:Math.floor(Math.random()*2147483647),x:0,y:0,tokens:0,xp:0,wins:0,loot:0,recruits:[],openedLoot:[],inspected:[],talkedTo:[],completedJobs:[],defeatedBosses:[],defeatedGuards:[],completedActivities:[],activityProgress:{},inventory:[],potions:[],activePotions:{},activeJob:null,tutorialDone:false,difficulty:"medium",superBossDefeated:false,superBossVictoryScore:0};
     try{
       const saved=JSON.parse(localStorage.getItem(WORLD_KEY)||"null");
       if(saved&&saved.format==="pong-world-save"&&saved.version===1){
@@ -751,6 +764,8 @@
         completedJobs:Array.isArray(saved.completedJobs)?saved.completedJobs:[],defeatedBosses:Array.isArray(saved.defeatedBosses)?saved.defeatedBosses:[],
         defeatedGuards:Array.isArray(saved.defeatedGuards)?saved.defeatedGuards:[],completedActivities:Array.isArray(saved.completedActivities)?saved.completedActivities:[],
         activityProgress:saved.activityProgress&&typeof saved.activityProgress==="object"?saved.activityProgress:{},inventory:Array.isArray(saved.inventory)?saved.inventory:[],
+        potions:Array.isArray(saved.potions)?saved.potions.filter((id)=>Object.hasOwn(worldPotionProducts,id)):[],
+        activePotions:saved.activePotions&&typeof saved.activePotions==="object"?Object.fromEntries(Object.entries(saved.activePotions).filter(([type,expiry])=>Object.hasOwn(worldPotionTypes,type)&&Number.isFinite(expiry))):{},
         difficulty:Object.hasOwn(worldDifficultySettings,saved.difficulty)?saved.difficulty:"medium",
         superBossVictoryScore:victoryScore,superBossDefeated:Boolean(saved.superBossDefeated&&victoryScore>=3)};
       }
@@ -759,6 +774,72 @@
   })();
   const worldCanvas=$("#world-canvas"),worldCtx=worldCanvas.getContext("2d");
   const worldBattleCanvas=$("#world-battle-canvas"),worldBattleCtx=worldBattleCanvas.getContext("2d");
+  const worldShopOverlay=$("#world-shop-overlay");
+  function hasActiveWorldPotion(type){return Number.isFinite(world.activePotions[type])&&world.activePotions[type]>Date.now()}
+  function updateWorldInventoryCount(){const count=$("#world-inventory-count");if(count)count.textContent=world.potions.length+world.inventory.length}
+  function renderWorldPotionShop(){
+    $("#world-shop-items").innerHTML=Object.entries(worldPotionTypes).map(([type,potion])=>
+      `<article class="world-shop-item"><div><strong>${potion.name}</strong><p>${potion.description}</p></div><div class="world-potion-prices">${worldPotionDurations.map(({minutes,price})=>`<button class="button button-secondary button-small" data-buy-potion="${type}-${minutes}" ${world.tokens<price?"disabled":""}>${minutes} MIN · ◈ ${price}</button>`).join("")}</div></article>`
+    ).join("");
+    $("#world-shop-balance").textContent=world.tokens;
+  }
+  function renderWorldPotionInventory(){
+    const counts=new Map();
+    for(const id of world.potions)counts.set(id,(counts.get(id)||0)+1);
+    const inventory=$("#world-inventory-potions");
+    const entries=[...counts].map(([id,count])=>{
+      const potion=worldPotionProducts[id];
+      return `<article class="world-inventory-item"><div><strong>${potion.name} · ${potion.minutes} MIN</strong><small>Owned: ${count}</small></div><button class="button button-primary button-small" data-use-potion="${id}">USE</button></article>`;
+    });
+    inventory.innerHTML=entries.join("")||`<p class="world-shop-empty">No potions yet. Buy some in the Shop.</p>`;
+    const lootCounts=new Map();
+    for(const item of world.inventory)lootCounts.set(item,(lootCounts.get(item)||0)+1);
+    const lootList=$("#world-inventory-loot");
+    lootList.replaceChildren();
+    if(lootCounts.size){
+      for(const [name,count] of lootCounts){
+        const item=document.createElement("span");
+        item.className="world-loot-item";item.textContent=`${name}${count>1?` ×${count}`:""}`;
+        lootList.append(item);
+      }
+    }else{
+      const empty=document.createElement("p");
+      empty.className="world-shop-empty";empty.textContent="No collected items yet.";
+      lootList.append(empty);
+    }
+    updateWorldPotionTimers();
+  }
+  function renderWorldPotionPanels(tab){
+    const shop=tab==="shop";
+    $("#world-shop-tab").classList.toggle("selected",shop);
+    $("#world-inventory-tab").classList.toggle("selected",!shop);
+    $("#world-shop-tab").setAttribute("aria-selected",String(shop));
+    $("#world-inventory-tab").setAttribute("aria-selected",String(!shop));
+    $("#world-shop-content").classList.toggle("hidden",!shop);
+    $("#world-inventory-content").classList.toggle("hidden",shop);
+    if(shop)renderWorldPotionShop();else renderWorldPotionInventory();
+  }
+  function openWorldPotionPanel(tab){
+    renderWorldPotionPanels(tab);
+    worldShopOverlay.classList.remove("hidden");
+  }
+  function closeWorldPotionPanel(){worldShopOverlay.classList.add("hidden")}
+  function formatPotionTime(milliseconds){
+    const seconds=Math.max(0,Math.ceil(milliseconds/1000));
+    return`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,"0")}`;
+  }
+  function updateWorldPotionTimers(){
+    const now=Date.now();let expired=false;
+    for(const [type,expiry] of Object.entries(world.activePotions)){
+      if(expiry<=now){delete world.activePotions[type];expired=true}
+    }
+    if(expired)saveWorld();
+    const active=Object.entries(world.activePotions).filter(([,expiry])=>expiry>now);
+    $("#world-active-potions").innerHTML=active.length
+      ?active.map(([type,expiry])=>`<span class="world-active-potion">${worldPotionTypes[type].name}<strong data-potion-expiry="${expiry}">${formatPotionTime(expiry-now)}</strong></span>`).join("")
+      :`<p class="world-shop-empty">No active potion effects.</p>`;
+    updateWorldInventoryCount();
+  }
   const tile=40,regionSize=24,biomes=["MOSS FIELDS","EMBER RIDGE","GLASS DESERT","FROSTLINE","NEON MARSH"];
   const worldNames={
     structure:["Signal Tower","Wayfarer Shrine","Old Relay","Rally Depot","Skybridge"],
@@ -919,6 +1000,40 @@
     saveWorld();updateWorldDifficulty();
     toast(`${worldDifficultySettings[world.difficulty].label} difficulty saved for this World.`);
   });
+  $("#world-shop-open").addEventListener("click",()=>openWorldPotionPanel("shop"));
+  $("#world-inventory-open").addEventListener("click",()=>openWorldPotionPanel("inventory"));
+  $("#world-shop-tab").addEventListener("click",()=>renderWorldPotionPanels("shop"));
+  $("#world-inventory-tab").addEventListener("click",()=>renderWorldPotionPanels("inventory"));
+  $("#world-shop-close").addEventListener("click",closeWorldPotionPanel);
+  worldShopOverlay.addEventListener("click",(event)=>{
+    if(event.target===worldShopOverlay)closeWorldPotionPanel();
+  });
+  $("#world-shop-items").addEventListener("click",(event)=>{
+    const button=event.target.closest("[data-buy-potion]");
+    if(!button)return;
+    const id=button.dataset.buyPotion,potion=worldPotionProducts[id];
+    if(!potion){toast("That potion is unavailable.");return}
+    if(world.tokens<potion.price){toast("You need more World tokens for that potion.");return}
+    world.tokens-=potion.price;world.potions.push(id);
+    saveWorld();updateWorldStats();renderWorldPotionPanels("shop");
+    toast(`${potion.name} added to your inventory.`);
+  });
+  $("#world-inventory-potions").addEventListener("click",(event)=>{
+    const button=event.target.closest("[data-use-potion]");
+    if(!button)return;
+    const id=button.dataset.usePotion,potion=worldPotionProducts[id],inventoryIndex=world.potions.indexOf(id);
+    if(!potion||inventoryIndex<0){toast("That potion is no longer in your inventory.");return}
+    world.potions.splice(inventoryIndex,1);
+    world.activePotions[potion.type]=Math.max(Date.now(),world.activePotions[potion.type]||0)+potion.minutes*60*1000;
+    saveWorld();updateWorldStats();renderWorldPotionPanels("inventory");
+    $("#world-message").textContent=`${potion.name} active for ${potion.minutes} minute${potion.minutes===1?"":"s"}.`;
+    toast(`${potion.name} used.`);
+  });
+  document.addEventListener("keydown",(event)=>{
+    if(worldShopOverlay.classList.contains("hidden"))return;
+    if(event.key==="Escape"){closeWorldPotionPanel();event.preventDefault()}
+    event.stopImmediatePropagation();
+  });
   $("#world-quests-toggle").addEventListener("click",()=>{
     const expanded=$("#world-quests-toggle").getAttribute("aria-expanded")!=="true";
     $("#world-quests-content").classList.toggle("hidden",!expanded);
@@ -959,6 +1074,7 @@
     $("#world-recruits").textContent=world.recruits.length;
     $("#world-wins").textContent=world.wins;
     $("#world-loot-count").textContent=world.loot;
+    updateWorldInventoryCount();
     $("#world-coordinates").textContent=`X: ${world.x} · Y: ${world.y}`;
     const sectorX=Math.floor(world.x/regionSize),sectorY=Math.floor(world.y/regionSize);
     $("#world-location").textContent=`${biomes[worldHash(sectorX,sectorY)%biomes.length]} · SECTOR ${sectorX}, ${sectorY}`;
@@ -1110,9 +1226,12 @@
   const superBossCode=["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight"];
   let activeActivity=null,superBossCodeIndex=0;
   function makeActivitySequence(site,kind){
-    if(kind==="riddle")return["ArrowUp","ArrowRight","ArrowDown","ArrowLeft","ArrowUp"];
-    if(kind==="qte")return Array.from({length:6},(_,index)=>["ArrowUp","ArrowRight","ArrowDown","ArrowLeft"][(worldHash(site.x,site.y,710+index)%4)]);
-    return["w","d","s","a","w","d"];
+    const sequence=kind==="riddle"
+      ?["ArrowUp","ArrowRight","ArrowDown","ArrowLeft","ArrowUp"]
+      :kind==="qte"
+        ?Array.from({length:6},(_,index)=>["ArrowUp","ArrowRight","ArrowDown","ArrowLeft"][(worldHash(site.x,site.y,710+index)%4)])
+        :["w","d","s","a","w","d"];
+    return hasActiveWorldPotion("intelligence")?sequence.slice(1):sequence;
   }
   function renderActivitySequence(sequence,index){
     $("#world-activity-sequence").innerHTML=sequence.map((key,i)=>`<kbd class="${i===index?"current":""}">${keyGlyphs[key]||key.toUpperCase()}</kbd>`).join("");
@@ -1298,6 +1417,7 @@
     if(ball.vx<=0)return;
     let rate=Number.isFinite(ball.aiSaveRate)?ball.aiSaveRate:(worldBattle.superBoss ? .9999 : worldDifficultySettings[world.difficulty].saveRate);
     if(worldBattle.guardIndex)rate=Math.min(.999,rate+.1);
+    if(!worldBattle.superBoss&&hasActiveWorldPotion("saving"))rate=Math.max(0,rate-.1);
     ball.aiSaves=Math.random()<rate;
     ball.aiTeleportCount=0;
     ball.realityWarpCount=0;
@@ -1417,7 +1537,9 @@
     updateWorldAiTarget(ball);
   }
   function startWorldQte(){
-    worldBattle.qteSequence=randomQteSequence();worldBattle.qteIndex=0;worldBattle.qteTimer=9;
+    worldBattle.qteSequence=randomQteSequence();
+    if(!worldBattle.superBoss&&hasActiveWorldPotion("intelligence"))worldBattle.qteSequence=worldBattle.qteSequence.slice(1);
+    worldBattle.qteIndex=0;worldBattle.qteTimer=9;
     const label=worldBattle.superBoss?`PONG DEVIL SMASH · QTE ${worldBattle.bossStack+1}/3`:worldBattle.boss?`BOSS TILT STACK · QTE ${worldBattle.bossStack+1}`:"QUICK RETURN";
     $("#world-battle-qte").innerHTML=`<span>${label}</span>${worldBattle.qteSequence.map((letter,index)=>`<kbd class="${index===0?"current":""}">${letter.toUpperCase()}</kbd>`).join("")}`;
     $("#world-battle-qte").classList.remove("hidden");
@@ -1614,7 +1736,7 @@
   function worldBattleFrame(time){
     const dt=Math.min((time-worldBattle.last)/16.67||1,2.4);worldBattle.last=time;
     if(worldBattle.running&&$("#page-world").classList.contains("active")){
-      const h=worldBattleCanvas.height,w=worldBattleCanvas.width,slowDt=worldBattle.qteTimer>0?dt*.08:dt,paddleSpeed=5.2*slowDt;
+      const h=worldBattleCanvas.height,w=worldBattleCanvas.width,slowDt=worldBattle.qteTimer>0?dt*.08:dt,paddleSpeed=5.2*slowDt*(!worldBattle.superBoss&&hasActiveWorldPotion("paddleSpeed")?1.5:1);
       worldBattle.depthPhase+=dt/60;
       if(worldBattle.depthEcho){
         worldBattle.depthEcho.timer-=dt/60;
@@ -1648,7 +1770,8 @@
         worldBattle.depthEcho={from:worldBattle.right,to:destination,timer:.5};
         worldBattle.right=destination;incoming.aiTeleportCount=teleportStage+1;
       }else{
-        const aiSpeed=worldBattle.guardIndex?8.5:6.5;
+        const aiSpeedMultiplier=!worldBattle.superBoss&&hasActiveWorldPotion("opponentSlow")?0.7:1;
+        const aiSpeed=(worldBattle.guardIndex?8.5:6.5)*aiSpeedMultiplier;
         worldBattle.right+=Math.max(-aiSpeed,Math.min(aiSpeed,target-worldBattle.right))*slowDt;
       }
       worldBattle.right=Math.max(rightHalf,Math.min(h-rightHalf,worldBattle.right));
@@ -1773,5 +1896,7 @@
   });
   drawWorld();
   updateWorldStats();
+  updateWorldPotionTimers();
+  window.setInterval(updateWorldPotionTimers,1000);
   if(!world.tutorialDone)$("#world-tutorial-start").click();
 })();
