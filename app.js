@@ -251,9 +251,12 @@
       return;
     }
     if(!canMoveProblemPaddle()||!["w","s"].includes(key))return;
-    event.preventDefault();problemPaddleKeys.add(key);
+    event.preventDefault();
+    if(!event.repeat)setProblemPaddleY(problem.paddleY+(key==="s"?4:-4));
+    problemPaddleKeys.add(key);
   });
   document.addEventListener("keyup",(event)=>problemPaddleKeys.delete(event.key.toLowerCase()));
+  window.addEventListener("blur",()=>problemPaddleKeys.clear());
   setProblemType("prediction");
 
   const canvas = $("#pong-canvas");
