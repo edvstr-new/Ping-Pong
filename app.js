@@ -103,6 +103,12 @@
 
   let problem={type:"prediction",phase:"aim",x:55,y:36,vx:-.78,vy:.48,paddleY:50,last:0,qteSequence:[],qteIndex:0,qteTime:0,trackingHits:0,streak:0,bestStreak:0,solved:0,totalAccuracy:0};
   const problemCourt=$("#problem-court"),problemBall=$("#problem-ball"),problemPaddle=$("#problem-player-paddle"),problemAction=$("#check-prediction");
+  const problemPaddleKeys=new Set();
+  function canMoveProblemPaddle(){return(problem.type==="prediction"&&problem.phase==="aim")||(problem.type==="strategy"&&(problem.phase==="aim"||problem.phase==="running"))}
+  function setProblemPaddleY(y){
+    problem.paddleY=Math.max(9,Math.min(91,y));
+    problemPaddle.style.top=`${problem.paddleY}%`;
+  }
   function updateProblemDirection(){
     const indicator=$("#problem-direction"),arrow=$("#problem-direction-arrow"),label=$("#problem-direction-label");
     const bounds=problemCourt.getBoundingClientRect(),courtWidth=bounds.width||1,courtHeight=bounds.height||260;
@@ -126,6 +132,7 @@
     problemAction.disabled=false;problemAction.textContent="TRY AGAIN  ↗";
   }
   function resetProblem(){
+    problemPaddleKeys.clear();
     problem.phase="aim";problem.x=55;problem.y=20+Math.random()*60;
     problem.vx=-.7-Math.random()*.16;problem.vy=(Math.random()-.5)*1.25;
     updateProblemDirection();
@@ -138,9 +145,9 @@
     $("#problem-result").textContent="";problemAction.disabled=false;
     problemAction.textContent=problem.type==="prediction"?"RELEASE THE BALL  ↗":problem.type==="timing"?"START QUICKTIME  ↗":"START TRACKING  ↗";
     $("#problem-prompt").textContent=problem.type==="prediction"
-      ?"The ball is frozen. Drag your paddle into position, then release the ball. Once it moves, your paddle is locked."
+      ?"The ball is frozen. Use W/S or drag to position your paddle, then release the ball. Once it moves, your paddle is locked."
       :problem.type==="timing"?"Ready your fingers. You'll have to hit the complete random WASD sequence before time runs out."
-      :"Start the drill, then drag your paddle up and down to catch the ball as it bounces across the court.";
+      :"Start the drill, then use W/S or drag to catch the ball as it bounces across the court.";
   }
   function newProblem(){resetProblem()}
   function setProblemType(type){
@@ -159,10 +166,9 @@
   }
   $$(".problem-type").forEach((button)=>button.addEventListener("click",()=>setProblemType(button.dataset.problemType)));
   function setProblemPaddleFromPointer(event){
-    if(problem.phase!=="aim"&&!(problem.type==="strategy"&&problem.phase==="running"))return;
+    if(!canMoveProblemPaddle())return;
     const bounds=problemCourt.getBoundingClientRect();
-    problem.paddleY=Math.max(9,Math.min(91,(event.clientY-bounds.top)/bounds.height*100));
-    problemPaddle.style.top=`${problem.paddleY}%`;
+    setProblemPaddleY((event.clientY-bounds.top)/bounds.height*100);
   }
   problemCourt.addEventListener("pointerdown",(event)=>{
     if(event.target===problemCourt||event.target===problemBall||event.target===problemPaddle){problemCourt.setPointerCapture(event.pointerId);setProblemPaddleFromPointer(event);event.preventDefault()}
@@ -190,7 +196,7 @@
     if(problem.type==="strategy"){
       problem.x=82;problem.y=16+Math.random()*68;problem.vx=-.62;problem.vy=.62+(Math.random()*.28);
       problemBall.style.left=`${problem.x}%`;problemBall.style.top=`${problem.y}%`;
-      $("#problem-prompt").textContent="Track the ball with your paddle. Each clean catch sends it back; miss once and the drill ends.";
+      $("#problem-prompt").textContent="Track the ball with W/S or by dragging. Each clean catch sends it back; miss once and the drill ends.";
       $("#tracking-progress").textContent="TRACKED RETURNS: 0 / 3";
     }else{
       $("#problem-prompt").textContent="The ball is live. Your paddle is locked—see whether your frozen position saves the point.";
@@ -200,9 +206,15 @@
   $("#new-problem").addEventListener("click",newProblem);
   problemAction.addEventListener("click",startProblem);
   function updateProblem(time){
-    if(!$("#page-problems").classList.contains("active")){problem.last=time;requestAnimationFrame(updateProblem);return}
+    if(!$("#page-problems").classList.contains("active")){
+      problem.last=time;problemPaddleKeys.clear();requestAnimationFrame(updateProblem);return
+    }
+    const dt=Math.min((time-problem.last)/16.67||1,2.4);problem.last=time;
+    if(canMoveProblemPaddle()&&problemPaddleKeys.size){
+      const direction=Number(problemPaddleKeys.has("s"))-Number(problemPaddleKeys.has("w"));
+      setProblemPaddleY(problem.paddleY+direction*dt*.9);
+    }
     if(problem.phase==="running"){
-      const dt=Math.min((time-problem.last)/16.67||1,2.4);problem.last=time;
       if(problem.type==="timing"){
         problem.qteTime-=dt/60;
         if(problem.qteTime<=0)finishProblem(false,"Time's up—you missed the QTE. Start another and try the combo again.");
@@ -222,20 +234,26 @@
           }else finishProblem(false,"You lost the ball. Keep your paddle moving with it and try again.");
         }else if(problem.type==="strategy"&&problem.vx>0&&problem.x>=88)problem.vx=-Math.abs(problem.vx);
       }
-    }else problem.last=time;
+    }
     requestAnimationFrame(updateProblem);
   }
   requestAnimationFrame(updateProblem);
   document.addEventListener("keydown",(event)=>{
-    if(!$("#page-problems").classList.contains("active")||problem.type!=="timing"||problem.phase!=="running")return;
+    if(!$("#page-problems").classList.contains("active"))return;
     const key=event.key.toLowerCase();
-    if(!["w","a","s","d"].includes(key))return;
-    event.preventDefault();
-    if(key===problem.qteSequence[problem.qteIndex])problem.qteIndex++;
-    else problem.qteIndex=key===problem.qteSequence[0]?1:0;
-    $$("#problem-qte-prompt kbd").forEach((letter,index)=>letter.classList.toggle("current",index===problem.qteIndex));
-    if(problem.qteIndex===problem.qteSequence.length)finishProblem(true,"Quick reactions! You nailed the whole combination.");
+    if(problem.type==="timing"&&problem.phase==="running"){
+      if(!["w","a","s","d"].includes(key))return;
+      event.preventDefault();
+      if(key===problem.qteSequence[problem.qteIndex])problem.qteIndex++;
+      else problem.qteIndex=key===problem.qteSequence[0]?1:0;
+      $$("#problem-qte-prompt kbd").forEach((letter,index)=>letter.classList.toggle("current",index===problem.qteIndex));
+      if(problem.qteIndex===problem.qteSequence.length)finishProblem(true,"Quick reactions! You nailed the whole combination.");
+      return;
+    }
+    if(!canMoveProblemPaddle()||!["w","s"].includes(key))return;
+    event.preventDefault();problemPaddleKeys.add(key);
   });
+  document.addEventListener("keyup",(event)=>problemPaddleKeys.delete(event.key.toLowerCase()));
   setProblemType("prediction");
 
   const canvas = $("#pong-canvas");
